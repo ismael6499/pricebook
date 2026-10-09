@@ -17,10 +17,72 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return dbPromise;
 }
 
+let hasSyncedPlanPrices = false;
+
+export async function syncPlanPricesToProducts(dbInstance?: SQLite.SQLiteDatabase): Promise<void> {
+  try {
+    const db = dbInstance || (await getDatabase());
+    const planItems = await db.getAllAsync<MonthlyPlanItem>(
+      'SELECT * FROM monthly_plan_items'
+    );
+    if (!planItems || planItems.length === 0) return;
+
+    for (const item of planItems) {
+      if (!item.name || item.estimated_unit_price <= 0) continue;
+
+      let prod = await db.getFirstAsync<Product>(
+        'SELECT * FROM products WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))',
+        item.name
+      );
+
+      if (!prod) {
+        const res = await db.runAsync(
+          'INSERT INTO products (name, category, unit, notes) VALUES (?, ?, ?, ?)',
+          item.name.trim(),
+          item.category || 'General',
+          item.unit_desc || '1 u',
+          item.notes || null
+        );
+        prod = {
+          id: res.lastInsertRowId,
+          name: item.name.trim(),
+          category: item.category || 'General',
+          unit: item.unit_desc || '1 u',
+          image_uri: null,
+          notes: item.notes || null,
+          created_at: '',
+          updated_at: '',
+        };
+      }
+
+      const existingPurchase = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM purchases WHERE product_id = ? LIMIT 1',
+        prod.id
+      );
+
+      if (!existingPurchase) {
+        await db.runAsync(
+          `INSERT INTO purchases (
+            product_id, unit_price, quantity, total_amount, currency, purchase_date, store, buyer, status, settlement_id, entry_type, notes
+          ) VALUES (?, ?, 1, 0, 'ARS', ?, 'Plan Mensual', 'Parents', 'settled', NULL, 'reference', ?)`,
+          prod.id,
+          item.estimated_unit_price,
+          '2026-09-30 12:00:00',
+          'Precio registrado del plan mensual'
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('Sync plan prices warning:', err);
+  }
+}
+
 export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
   if (isInitialized) return;
   try {
     await db.execAsync(INITIAL_SCHEMA);
+    await syncPlanPricesToProducts(db);
+    hasSyncedPlanPrices = true;
   } catch (err) {
     console.warn('Database initialization warning:', err);
   }
@@ -211,12 +273,22 @@ export async function deleteCategory(id: number): Promise<void> {
 
 export async function getAllProducts(searchQuery: string = '', categoryFilter: string = 'All'): Promise<Product[]> {
   const db = await getDatabase();
+  if (!hasSyncedPlanPrices) {
+    await syncPlanPricesToProducts(db);
+    hasSyncedPlanPrices = true;
+  }
   
   let sql = `
     SELECT p.*,
-      (SELECT unit_price FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1) as latest_price,
+      COALESCE(
+        (SELECT unit_price FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1),
+        (SELECT estimated_unit_price FROM monthly_plan_items WHERE LOWER(TRIM(name)) = LOWER(TRIM(p.name)) LIMIT 1)
+      ) as latest_price,
       (SELECT unit_price FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1 OFFSET 1) as previous_price,
-      (SELECT purchase_date FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1) as last_purchase_date,
+      COALESCE(
+        (SELECT purchase_date FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1),
+        (SELECT created_at FROM monthly_plan_items WHERE LOWER(TRIM(name)) = LOWER(TRIM(p.name)) LIMIT 1)
+      ) as last_purchase_date,
       (SELECT COUNT(*) FROM purchases WHERE product_id = p.id) as total_purchases_count
     FROM products p
     WHERE 1=1
@@ -251,11 +323,21 @@ export async function getAllProducts(searchQuery: string = '', categoryFilter: s
 
 export async function getProductById(id: number): Promise<Product | null> {
   const db = await getDatabase();
+  if (!hasSyncedPlanPrices) {
+    await syncPlanPricesToProducts(db);
+    hasSyncedPlanPrices = true;
+  }
   const row = await db.getFirstAsync<Product>(
     `SELECT p.*,
-      (SELECT unit_price FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1) as latest_price,
+      COALESCE(
+        (SELECT unit_price FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1),
+        (SELECT estimated_unit_price FROM monthly_plan_items WHERE LOWER(TRIM(name)) = LOWER(TRIM(p.name)) LIMIT 1)
+      ) as latest_price,
       (SELECT unit_price FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1 OFFSET 1) as previous_price,
-      (SELECT purchase_date FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1) as last_purchase_date,
+      COALESCE(
+        (SELECT purchase_date FROM purchases WHERE product_id = p.id ORDER BY purchase_date DESC LIMIT 1),
+        (SELECT created_at FROM monthly_plan_items WHERE LOWER(TRIM(name)) = LOWER(TRIM(p.name)) LIMIT 1)
+      ) as last_purchase_date,
       (SELECT COUNT(*) FROM purchases WHERE product_id = p.id) as total_purchases_count
      FROM products p
      WHERE p.id = ?`,

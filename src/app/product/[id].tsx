@@ -165,8 +165,8 @@ export default function ProductDetailScreen() {
   // Price points for chart (chronological: oldest to newest)
   const chartPurchases = [...purchases].reverse();
   const prices = chartPurchases.map((p) => p.unit_price);
-  const minPrice = prices.length ? Math.min(...prices) : 0;
-  const maxPrice = prices.length ? Math.max(...prices) : 0;
+  const minPrice = prices.length ? Math.min(...prices) : (product.latest_price || 0);
+  const maxPrice = prices.length ? Math.max(...prices) : (product.latest_price || 0);
 
   // Render SVG Line Chart
   const renderChart = () => {
@@ -344,7 +344,27 @@ export default function ProductDetailScreen() {
       <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>{t('products.history')}</Text>
         {purchases.length === 0 ? (
-          <Text style={styles.noHistoryText}>{t('common.empty_state')}</Text>
+          product.latest_price ? (
+            <View style={styles.historyItem}>
+              <View style={styles.historyTopRow}>
+                <Text style={styles.historyDate}>{t('plan.freq_monthly')}</Text>
+                <View style={styles.refBadge}>
+                  <Ionicons name="pricetag" size={12} color={colors.primary} />
+                  <Text style={styles.refBadgeText}>{t('purchases.reference_badge')}</Text>
+                </View>
+              </View>
+              <View style={styles.historyDetailRow}>
+                <Text style={styles.historyCalculation}>
+                  {formatCurrency(product.latest_price)} (Plan Mensual)
+                </Text>
+              </View>
+              <View style={styles.historyMetaRow}>
+                <Text style={styles.historyMeta}>📍 Plan Mensual • 👤 Parents</Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.noHistoryText}>{t('common.empty_state')}</Text>
+          )
         ) : (
           purchases.map((pur) => (
             <View key={pur.id} style={styles.historyItem}>

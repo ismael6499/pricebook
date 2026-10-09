@@ -18,6 +18,7 @@ import {
   deleteMonthlyPlanItem,
   getAllProducts,
   createProduct,
+  createPurchase,
   MonthlyPlanItem,
 } from '../../db/database';
 import { colors } from '../../constants/theme';
@@ -239,8 +240,32 @@ export default function MonthlyPlanScreen() {
         unit: item.unit_desc || '1 u',
         notes: item.notes || undefined,
       });
+      if (item.estimated_unit_price > 0) {
+        await createPurchase({
+          product_id: newId,
+          unit_price: item.estimated_unit_price,
+          quantity: 1,
+          store: 'Plan Mensual',
+          buyer: 'Parents',
+          notes: 'Precio registrado del plan mensual',
+          status: 'settled',
+          entry_type: 'reference',
+        });
+      }
       router.push(`/product/${newId}` as any);
     } else {
+      if ((!target.latest_price || target.latest_price <= 0) && item.estimated_unit_price > 0) {
+        await createPurchase({
+          product_id: target.id,
+          unit_price: item.estimated_unit_price,
+          quantity: 1,
+          store: 'Plan Mensual',
+          buyer: 'Parents',
+          notes: 'Precio registrado del plan mensual',
+          status: 'settled',
+          entry_type: 'reference',
+        });
+      }
       router.push(`/product/${target.id}` as any);
     }
   };

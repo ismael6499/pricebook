@@ -14,6 +14,12 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
   // Amount input (defaults to unitPrice if positive, but user can freely change)
   const [customAmount, setCustomAmount] = useState<string>(unitPrice > 0 ? String(unitPrice) : '');
 
+  React.useEffect(() => {
+    if (unitPrice > 0 && (!customAmount || customAmount === '0')) {
+      setCustomAmount(String(unitPrice));
+    }
+  }, [unitPrice]);
+
   // Frequency basis
   const [basis, setBasis] = useState<'week' | 'day' | 'biweekly' | 'month' | 'custom'>('week');
   const [customDays, setCustomDays] = useState('3');
