@@ -60,3 +60,8 @@ backups/
 # generated native folders
 /ios
 /android
+
+# AI Agent, Handoff & Assistant Metadata
+AGENTS.md
+HANDOFF.md
+.claude/
