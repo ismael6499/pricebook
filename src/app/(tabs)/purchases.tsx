@@ -254,7 +254,12 @@ export default function PurchasesScreen() {
       </View>
 
       {/* Time Filter Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeFilterContainer}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.timeFilterScrollView}
+        contentContainerStyle={styles.timeFilterContainer}
+      >
         <TouchableOpacity
           style={[styles.timeChip, timeFilter === 'all' && styles.timeChipActive]}
           onPress={() => setTimeFilter('all')}
@@ -366,6 +371,7 @@ export default function PurchasesScreen() {
 
       {/* Purchases List */}
       <FlatList
+        style={styles.flatList}
         data={purchases}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderPurchaseItem}
@@ -698,17 +704,26 @@ const styles = StyleSheet.create({
     height: 22,
     backgroundColor: colors.border,
   },
+  timeFilterScrollView: {
+    flexGrow: 0,
+    height: 44,
+    maxHeight: 44,
+    marginTop: 6,
+    marginBottom: 2,
+  },
   timeFilterContainer: {
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+    height: 44,
   },
   timeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    height: 32,
     borderRadius: 16,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -726,6 +741,9 @@ const styles = StyleSheet.create({
   timeChipTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  flatList: {
+    flex: 1,
   },
   badgeReference: {
     flexDirection: 'row',
