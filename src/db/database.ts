@@ -27,6 +27,22 @@ export async function ensureSchemaMigrations(db: SQLite.SQLiteDatabase): Promise
       await db.execAsync("ALTER TABLE purchases ADD COLUMN entry_type TEXT DEFAULT 'purchase';");
     }
     await db.execAsync('CREATE INDEX IF NOT EXISTS idx_purchases_type ON purchases(entry_type);');
+
+    // Migrate old Spanish seed defaults in monthly plan & products to standard English
+    await db.execAsync(`
+      UPDATE monthly_plan_items SET unit_desc = '1 portion / day' WHERE unit_desc = '1 porción / día';
+      UPDATE monthly_plan_items SET unit_desc = '62 units (2/day)' WHERE unit_desc = '62 unidades (2/día)';
+      UPDATE monthly_plan_items SET unit_desc = '62 bananas (2/day)' WHERE unit_desc = '62 bananas (2/día)';
+      UPDATE monthly_plan_items SET unit_desc = '8 packs / month' WHERE unit_desc = '8 paquetes / mes';
+      UPDATE monthly_plan_items SET unit_desc = '248 units / month' WHERE unit_desc = '248 unidades / mes';
+      UPDATE monthly_plan_items SET unit_desc = '4 weeks / month' WHERE unit_desc = '4 semanas / mes';
+      UPDATE monthly_plan_items SET unit_desc = '93 bottles / month' WHERE unit_desc = '93 botellas / mes';
+      UPDATE monthly_plan_items SET unit_desc = '1 bottle / month' WHERE unit_desc = '1 botella / mes';
+      UPDATE products SET unit = '1 portion' WHERE unit = '1 porción';
+      UPDATE products SET unit = '2 units' WHERE unit = '2 unidades';
+      UPDATE products SET unit = '1 pack' WHERE unit = '1 paquete';
+      UPDATE products SET unit = '1 bottle' WHERE unit = '1 botella';
+    `);
   } catch (err) {
     console.warn('Schema migration warning:', err);
   }
@@ -609,10 +625,73 @@ export async function togglePurchaseStatus(id: number, newStatus: 'pending' | 's
   );
 }
 
+export async function updatePurchase(
+  id: number,
+  data: {
+    unit_price: number;
+    quantity?: number;
+    purchase_date?: string;
+    store?: string;
+    buyer?: string;
+    notes?: string;
+    status?: 'pending' | 'settled';
+    currency?: string;
+    usd_rate?: number | null;
+    entry_type?: 'purchase' | 'reference';
+  }
+): Promise<void> {
+  const db = await getDatabase();
+  const entryType = data.entry_type || 'purchase';
+  const qty = data.quantity && data.quantity > 0 ? data.quantity : 1;
+  const total = entryType === 'reference' ? 0 : Number((data.unit_price * qty).toFixed(2));
+  const newStatus = entryType === 'reference' ? 'settled' : (data.status || 'pending');
+
+  let sql = `
+    UPDATE purchases 
+    SET unit_price = ?,
+        quantity = ?,
+        total_amount = ?,
+        store = ?,
+        buyer = ?,
+        status = ?,
+        entry_type = ?,
+        notes = ?
+  `;
+  const params: any[] = [
+    data.unit_price,
+    qty,
+    total,
+    data.store?.trim() || null,
+    data.buyer?.trim() || 'Parents',
+    newStatus,
+    entryType,
+    data.notes?.trim() || null,
+  ];
+
+  if (data.purchase_date) {
+    sql += `, purchase_date = ?`;
+    params.push(data.purchase_date);
+  }
+  if (data.currency) {
+    sql += `, currency = ?`;
+    params.push(data.currency);
+  }
+  if (data.usd_rate !== undefined) {
+    sql += `, usd_rate = ?`;
+    params.push(data.usd_rate ?? null);
+  }
+
+  sql += ` WHERE id = ?`;
+  params.push(id);
+
+  await db.runAsync(sql, ...params);
+}
+
 export async function deletePurchase(id: number): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM purchases WHERE id = ?', id);
 }
+
 
 // -------------------------------------------------------------------------
 // Settlement & Repayment Logic

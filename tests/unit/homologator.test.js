@@ -65,6 +65,33 @@ function runHomologatorTests() {
     assertApprox(biweeklyDay, 2500.0, 0.01, 'Biweekly: $35.000 every 14 days -> $2.500/day');
     assertApprox(biweeklyWeek, 17500.0, 0.01, 'Biweekly: $35.000 every 14 days -> $17.500/week');
     assertApprox(biweeklyMonthAvg, 76041.75, 0.5, 'Biweekly: $35.000 every 14 days -> $76.041,75/month');
+
+    // Case 6: Intercalated / Alternating Schedule (Agustín's Bananas & Apples)
+    // Bananas: 3 days/week (Mon, Wed, Fri), 2 bananas per day, $500 per banana
+    const bananaPrice = 500;
+    const bananaActiveDays = 3;
+    const bananaDailyQty = 2;
+    const bananaWeeklyQty = bananaActiveDays * bananaDailyQty; // 6 bananas/week
+    const bananaMonthlyQty = Math.round(bananaWeeklyQty * (52 / 12)); // 26 bananas/month
+    const bananaWeeklyCost = bananaWeeklyQty * bananaPrice; // $3.000 / week
+    const bananaMonthlyCost = bananaMonthlyQty * bananaPrice; // $13.000 / month
+
+    assert(bananaWeeklyQty === 6, 'Alternating: 3 days x 2 bananas = 6 bananas/week');
+    assert(bananaMonthlyQty === 26, 'Alternating: 6 bananas/week -> 26 bananas/month');
+    assertApprox(bananaMonthlyCost, 13000.0, 0.01, 'Alternating: Bananas monthly budget is $13.000');
+
+    // Apples: 3 days/week (Tue, Thu, Sat), 2 apples per day, $1.000 per apple
+    const applePrice = 1000;
+    const appleActiveDays = 3;
+    const appleDailyQty = 2;
+    const appleWeeklyQty = appleActiveDays * appleDailyQty; // 6 apples/week
+    const appleMonthlyQty = Math.round(appleWeeklyQty * (52 / 12)); // 26 apples/month
+    const appleMonthlyCost = appleMonthlyQty * applePrice; // $26.000 / month
+
+    assert(appleWeeklyQty === 6, 'Alternating: 3 days x 2 apples = 6 apples/week');
+    assert(appleMonthlyQty === 26, 'Alternating: 6 apples/week -> 26 apples/month');
+    assertApprox(appleMonthlyCost, 26000.0, 0.01, 'Alternating: Apples monthly budget is $26.000');
+    assert(bananaMonthlyCost + appleMonthlyCost === 39000, 'Alternating: Combined fruit budget is $39.000 (prevents double counting)');
   });
 }
 

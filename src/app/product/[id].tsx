@@ -19,6 +19,7 @@ import {
   getProductById,
   getPurchases,
   createPurchase,
+  updatePurchase,
   togglePurchaseStatus,
   deletePurchase,
   deleteProduct,
@@ -44,8 +45,17 @@ export default function ProductDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [purchaseModalVisible, setPurchaseModalVisible] = useState(false);
   const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
 
-  // New purchase form
+  // Edit product details state
+  const [editProductModalVisible, setEditProductModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editUnit, setEditUnit] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+
+  // Purchase form
   const [entryType, setEntryType] = useState<'purchase' | 'reference'>('purchase');
   const [unitPrice, setUnitPrice] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -103,7 +113,61 @@ export default function ProductDetailScreen() {
     }
   };
 
-  const handleAddPurchase = async () => {
+  const openEditProductModal = () => {
+    if (!product) return;
+    setEditName(product.name);
+    setEditCategory(product.category);
+    setEditUnit(product.unit);
+    setEditNotes(product.notes || '');
+    setEditProductModalVisible(true);
+  };
+
+  const handleSaveProductEdit = async () => {
+    if (!product) return;
+    if (!editName.trim()) {
+      Alert.alert(t('common.error'), 'Product name is required');
+      return;
+    }
+    try {
+      await updateProduct(product.id, {
+        name: editName.trim(),
+        category: editCategory.trim() || 'General',
+        unit: editUnit.trim() || '1 u',
+        notes: editNotes.trim() || undefined,
+        image_uri: product.image_uri,
+      });
+      setEditProductModalVisible(false);
+      loadData();
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err?.message || 'Failed to update product');
+    }
+  };
+
+  const handleOpenAddPurchase = () => {
+    setEditingPurchase(null);
+    setUnitPrice(product?.latest_price ? String(product.latest_price) : '');
+    setQuantity('1');
+    setStore('');
+    setBuyer('Parents');
+    setNotes('');
+    setEntryType('purchase');
+    setStatus('pending');
+    setPurchaseModalVisible(true);
+  };
+
+  const handleEditPurchase = (pur: Purchase) => {
+    setEditingPurchase(pur);
+    setUnitPrice(String(pur.unit_price));
+    setQuantity(String(pur.quantity || 1));
+    setStore(pur.store || '');
+    setBuyer(pur.buyer || 'Parents');
+    setNotes(pur.notes || '');
+    setEntryType(pur.entry_type || 'purchase');
+    setStatus(pur.status || 'pending');
+    setPurchaseModalVisible(true);
+  };
+
+  const handleSavePurchase = async () => {
     const priceNum = parseFloat(unitPrice.replace(',', '.'));
     if (isNaN(priceNum) || priceNum <= 0) {
       Alert.alert(t('common.error'), 'Please enter a valid unit price');
@@ -112,18 +176,32 @@ export default function ProductDetailScreen() {
     const qtyNum = parseFloat(quantity.replace(',', '.')) || 1;
 
     try {
-      await createPurchase({
-        product_id: productId,
-        unit_price: priceNum,
-        quantity: qtyNum,
-        store: store.trim() || undefined,
-        buyer: buyer.trim() || 'Parents',
-        notes: notes.trim() || undefined,
-        status: entryType === 'reference' ? 'settled' : status,
-        entry_type: entryType,
-        usd_rate: usdRate,
-      });
+      if (editingPurchase) {
+        await updatePurchase(editingPurchase.id, {
+          unit_price: priceNum,
+          quantity: qtyNum,
+          store: store.trim() || undefined,
+          buyer: buyer.trim() || 'Parents',
+          notes: notes.trim() || undefined,
+          status: entryType === 'reference' ? 'settled' : status,
+          entry_type: entryType,
+          usd_rate: usdRate,
+        });
+      } else {
+        await createPurchase({
+          product_id: productId,
+          unit_price: priceNum,
+          quantity: qtyNum,
+          store: store.trim() || undefined,
+          buyer: buyer.trim() || 'Parents',
+          notes: notes.trim() || undefined,
+          status: entryType === 'reference' ? 'settled' : status,
+          entry_type: entryType,
+          usd_rate: usdRate,
+        });
+      }
 
+      setEditingPurchase(null);
       setUnitPrice('');
       setQuantity('1');
       setStore('');
@@ -279,7 +357,20 @@ export default function ProductDetailScreen() {
     >
       {/* Hero Header */}
       <View style={styles.heroCard}>
-        <TouchableOpacity style={styles.photoContainer} onPress={() => setPhotoPickerVisible(true)}>
+        <TouchableOpacity
+          style={styles.photoContainer}
+          activeOpacity={0.8}
+          onPress={() => {
+            if (product.image_uri) {
+              setImageViewerVisible(true);
+            } else {
+              setPhotoPickerVisible(true);
+            }
+          }}
+          onLongPress={() => {
+            setPhotoPickerVisible(true);
+          }}
+        >
           {product.image_uri ? (
             <Image source={{ uri: product.image_uri }} style={styles.heroImage} />
           ) : (
@@ -293,9 +384,14 @@ export default function ProductDetailScreen() {
         <View style={styles.heroDetails}>
           <View style={styles.heroTitleRow}>
             <Text style={styles.heroName}>{product.name}</Text>
-            <TouchableOpacity onPress={handleDeleteProduct}>
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity onPress={openEditProductModal}>
+                <Ionicons name="pencil-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleDeleteProduct}>
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              </TouchableOpacity>
+            </View>
           </View>
           <View style={styles.tagsRow}>
             <View style={styles.categoryBadge}>
@@ -362,7 +458,7 @@ export default function ProductDetailScreen() {
       <TouchableOpacity
         style={styles.recordBtn}
         activeOpacity={0.8}
-        onPress={() => setPurchaseModalVisible(true)}
+        onPress={handleOpenAddPurchase}
       >
         <Ionicons name="add-circle" size={20} color="#FFFFFF" />
         <Text style={styles.recordBtnText}>{t('purchases.add_purchase')}</Text>
@@ -433,9 +529,14 @@ export default function ProductDetailScreen() {
                   {formatCurrency(pur.unit_price)} x {pur.quantity} ={' '}
                   <Text style={styles.historyTotal}>{formatCurrency(pur.total_amount)}</Text>
                 </Text>
-                <TouchableOpacity onPress={() => handleDeletePurchase(pur.id)}>
-                  <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <TouchableOpacity onPress={() => handleEditPurchase(pur)}>
+                    <Ionicons name="pencil-outline" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDeletePurchase(pur.id)}>
+                    <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.historyMetaRow}>
@@ -453,13 +554,15 @@ export default function ProductDetailScreen() {
         )}
       </View>
 
-      {/* Record Purchase Modal */}
+      {/* Record / Edit Purchase Modal */}
       <Modal visible={purchaseModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('purchases.add_purchase')}</Text>
-              <TouchableOpacity onPress={() => setPurchaseModalVisible(false)}>
+              <Text style={styles.modalTitle}>
+                {editingPurchase ? t('purchases.edit_purchase') : t('purchases.add_purchase')}
+              </Text>
+              <TouchableOpacity onPress={() => { setPurchaseModalVisible(false); setEditingPurchase(null); }}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -582,11 +685,119 @@ export default function ProductDetailScreen() {
                 </>
               )}
 
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddPurchase}>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSavePurchase}>
                 <Text style={styles.saveBtnText}>{t('common.save')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      {/* Edit Product Details Modal */}
+      <Modal visible={editProductModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('products.edit_product')}</Text>
+              <TouchableOpacity onPress={() => setEditProductModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>{t('products.name')}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder={t('products.name_placeholder')}
+                placeholderTextColor={colors.textMuted}
+                value={editName}
+                onChangeText={setEditName}
+              />
+
+              <Text style={styles.inputLabel}>{t('products.category')}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder={t('products.category_placeholder')}
+                placeholderTextColor={colors.textMuted}
+                value={editCategory}
+                onChangeText={setEditCategory}
+              />
+
+              <Text style={styles.inputLabel}>{t('products.unit')}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder={t('products.unit_placeholder')}
+                placeholderTextColor={colors.textMuted}
+                value={editUnit}
+                onChangeText={setEditUnit}
+              />
+
+              <Text style={styles.inputLabel}>{t('products.notes')}</Text>
+              <TextInput
+                style={[styles.modalInput, { minHeight: 70, textAlignVertical: 'top' }]}
+                placeholder={t('products.notes_placeholder')}
+                placeholderTextColor={colors.textMuted}
+                value={editNotes}
+                onChangeText={setEditNotes}
+                multiline
+              />
+
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProductEdit}>
+                <Text style={styles.saveBtnText}>{t('common.save')}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Fullscreen Photo Viewer Modal */}
+      <Modal
+        visible={imageViewerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setImageViewerVisible(false)}
+      >
+        <View style={styles.imageViewerOverlay}>
+          {/* Top Bar with Product Name, Camera change icon, Close Button */}
+          <View style={styles.imageViewerHeader}>
+            <View style={styles.imageViewerTitleWrapper}>
+              <Text style={styles.imageViewerTitle} numberOfLines={1}>
+                {product.name}
+              </Text>
+            </View>
+            <View style={styles.imageViewerActions}>
+              <TouchableOpacity
+                style={styles.imageViewerActionBtn}
+                onPress={() => {
+                  setImageViewerVisible(false);
+                  setTimeout(() => setPhotoPickerVisible(true), 250);
+                }}
+              >
+                <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.imageViewerActionBtn}
+                onPress={() => setImageViewerVisible(false)}
+              >
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Expanded Image Body */}
+          <TouchableOpacity
+            style={styles.imageViewerBody}
+            activeOpacity={1}
+            onPress={() => setImageViewerVisible(false)}
+          >
+            {product.image_uri ? (
+              <Image
+                source={{ uri: product.image_uri }}
+                style={styles.imageViewerImage}
+                resizeMode="contain"
+              />
+            ) : null}
+          </TouchableOpacity>
         </View>
       </Modal>
 
@@ -983,4 +1194,51 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginBottom: 4,
   },
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.94)',
+    justifyContent: 'space-between',
+  },
+  imageViewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  imageViewerTitleWrapper: {
+    flex: 1,
+    marginRight: 12,
+  },
+  imageViewerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  imageViewerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  imageViewerActionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageViewerBody: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 10,
+  },
+  imageViewerImage: {
+    width: '100%',
+    height: '100%',
+  },
 });
+

@@ -16,6 +16,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import {
   getMonthlyPlanItems,
   createMonthlyPlanItem,
+  updateMonthlyPlanItem,
   deleteMonthlyPlanItem,
   getAllProducts,
   createProduct,
@@ -24,7 +25,7 @@ import {
   MonthlyPlanItem,
 } from '../../db/database';
 import { colors } from '../../constants/theme';
-import { t, formatCurrency, formatPercent } from '../../i18n';
+import { t, formatCurrency, formatPercent, getLocale } from '../../i18n';
 
 export default function MonthlyPlanScreen() {
   const router = useRouter();
@@ -32,13 +33,16 @@ export default function MonthlyPlanScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [quickCalcModalVisible, setQuickCalcModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<MonthlyPlanItem | null>(null);
 
   // Form state
   const [name, setName] = useState('');
   const [calcMode, setCalcMode] = useState<'frequency' | 'standard'>('frequency');
   const [freqAmount, setFreqAmount] = useState('15000');
-  const [freqType, setFreqType] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly' | 'custom'>('weekly');
+  const [freqType, setFreqType] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly' | 'custom' | 'alternating'>('weekly');
   const [freqCustomDays, setFreqCustomDays] = useState('3');
+  const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Wed', 'Fri']);
+  const [qtyPerDay, setQtyPerDay] = useState('2');
   const [unitDesc, setUnitDesc] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [monthlyQty, setMonthlyQty] = useState('1');
@@ -120,6 +124,15 @@ export default function MonthlyPlanScreen() {
       homMonth30 = (freqAmountNum / days) * 30;
       homMonth31 = (freqAmountNum / days) * 31;
       homMonthAvg = (freqAmountNum / days) * 30.4167;
+    } else if (freqType === 'alternating') {
+      const daysCount = selectedDays.length > 0 ? selectedDays.length : 1;
+      const dailyQty = parseFloat(qtyPerDay) || 1;
+      const weeklyCost = freqAmountNum * daysCount * dailyQty;
+      homDay = weeklyCost / 7;
+      homWeek = weeklyCost;
+      homMonth30 = (weeklyCost / 7) * 30;
+      homMonth31 = (weeklyCost / 7) * 31;
+      homMonthAvg = weeklyCost * (52 / 12);
     }
   }
 
@@ -166,57 +179,96 @@ export default function MonthlyPlanScreen() {
     }
   }
 
-  const handleAddItem = async () => {
+  const handleOpenAddModal = () => {
+    setEditingItem(null);
+    setName('');
+    setUnitDesc('');
+    setUnitPrice('');
+    setMonthlyQty('1');
+    setFreqAmount('15000');
+    setQtyPerDay('2');
+    setSelectedDays(['Mon', 'Wed', 'Fri']);
+    setNotes('');
+    setCalcMode('frequency');
+    setFreqType('weekly');
+    setModalVisible(true);
+  };
+
+  const handleEditItem = (item: MonthlyPlanItem) => {
+    setEditingItem(item);
+    setName(item.name);
+    setUnitDesc(item.unit_desc || '');
+    setUnitPrice(String(item.estimated_unit_price));
+    setMonthlyQty(String(item.estimated_monthly_qty));
+    setFreqAmount(String(item.estimated_unit_price));
+    setNotes(item.notes || '');
+    setCalcMode('standard');
+    setModalVisible(true);
+  };
+
+  const handleSaveItem = async () => {
     if (!name.trim()) {
       Alert.alert(t('common.error'), 'Item name is required');
       return;
     }
 
     try {
+      const isEn = getLocale() === 'en';
+      let finalUnitDesc = '';
+      let finalQty = 1;
+      let finalUnitPrice = 0;
+
       if (calcMode === 'frequency') {
         if (freqAmountNum <= 0) {
           Alert.alert(t('common.error'), 'Please enter a valid amount');
           return;
         }
 
-        let finalUnitDesc = '';
-        let finalQty = 1;
-        let finalUnitPrice = freqAmountNum;
+        finalUnitPrice = freqAmountNum;
 
         if (freqType === 'weekly') {
-          finalUnitDesc = `1/sem (${formatCurrency(freqAmountNum)})`;
+          finalUnitDesc = isEn ? `1/wk (${formatCurrency(freqAmountNum)})` : `1/sem (${formatCurrency(freqAmountNum)})`;
           finalQty = 4.33;
         } else if (freqType === 'daily') {
-          finalUnitDesc = `1/día (${formatCurrency(freqAmountNum)})`;
+          finalUnitDesc = isEn ? `1/day (${formatCurrency(freqAmountNum)})` : `1/día (${formatCurrency(freqAmountNum)})`;
           finalQty = 30.4;
         } else if (freqType === 'biweekly') {
-          finalUnitDesc = `c/15d (${formatCurrency(freqAmountNum)})`;
+          finalUnitDesc = isEn ? `every 15d (${formatCurrency(freqAmountNum)})` : `c/15d (${formatCurrency(freqAmountNum)})`;
           finalQty = 2.17;
         } else if (freqType === 'monthly') {
-          finalUnitDesc = `1/mes (${formatCurrency(freqAmountNum)})`;
+          finalUnitDesc = isEn ? `1/mo (${formatCurrency(freqAmountNum)})` : `1/mes (${formatCurrency(freqAmountNum)})`;
           finalQty = 1;
         } else if (freqType === 'custom') {
           const days = parseFloat(freqCustomDays) || 1;
-          finalUnitDesc = `c/${days}d (${formatCurrency(freqAmountNum)})`;
+          finalUnitDesc = isEn ? `every ${days}d (${formatCurrency(freqAmountNum)})` : `c/${days}d (${formatCurrency(freqAmountNum)})`;
           finalQty = Number((30.4167 / days).toFixed(2));
+        } else if (freqType === 'alternating') {
+          const daysCount = selectedDays.length > 0 ? selectedDays.length : 1;
+          const dailyQty = parseFloat(qtyPerDay.replace(',', '.')) || 1;
+          finalUnitDesc = isEn ? `${daysCount}d/wk (${dailyQty}/day)` : `${daysCount}d/sem (${dailyQty}/día)`;
+          finalQty = Number(((daysCount * dailyQty) * (52 / 12)).toFixed(2));
         }
+      } else {
+        finalUnitPrice = parseFloat(unitPrice.replace(',', '.')) || 0;
+        finalQty = parseFloat(monthlyQty.replace(',', '.')) || 1;
+        finalUnitDesc = unitDesc.trim();
+      }
 
-        await createMonthlyPlanItem({
+      if (editingItem) {
+        await updateMonthlyPlanItem(editingItem.id, {
           name: name.trim(),
-          unit_desc: finalUnitDesc,
+          category: editingItem.category || 'General',
+          unit_desc: finalUnitDesc || undefined,
           estimated_unit_price: finalUnitPrice,
           estimated_monthly_qty: finalQty,
           notes: notes.trim() || undefined,
         });
       } else {
-        const priceNum = parseFloat(unitPrice.replace(',', '.')) || 0;
-        const qtyNum = parseFloat(monthlyQty.replace(',', '.')) || 1;
-
         await createMonthlyPlanItem({
           name: name.trim(),
-          unit_desc: unitDesc.trim() || undefined,
-          estimated_unit_price: priceNum,
-          estimated_monthly_qty: qtyNum,
+          unit_desc: finalUnitDesc || undefined,
+          estimated_unit_price: finalUnitPrice,
+          estimated_monthly_qty: finalQty,
           notes: notes.trim() || undefined,
         });
       }
@@ -226,11 +278,14 @@ export default function MonthlyPlanScreen() {
       setUnitPrice('');
       setMonthlyQty('1');
       setFreqAmount('15000');
+      setQtyPerDay('2');
+      setSelectedDays(['Mon', 'Wed', 'Fri']);
       setNotes('');
+      setEditingItem(null);
       setModalVisible(false);
       loadData();
     } catch (err) {
-      Alert.alert(t('common.error'), 'Failed to add plan item');
+      Alert.alert(t('common.error'), 'Failed to save plan item');
     }
   };
 
@@ -318,6 +373,9 @@ export default function MonthlyPlanScreen() {
               <Ionicons name="cart-outline" size={14} color={colors.primary} />
               <Text style={styles.quickRecordText}>View Product</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleEditItem(item)} style={{ paddingHorizontal: 6 }}>
+              <Ionicons name="pencil-outline" size={16} color={colors.primary} />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => handleDelete(item.id)}>
               <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
             </TouchableOpacity>
@@ -395,18 +453,20 @@ export default function MonthlyPlanScreen() {
       <TouchableOpacity
         style={styles.fab}
         activeOpacity={0.8}
-        onPress={() => setModalVisible(true)}
+        onPress={handleOpenAddModal}
       >
         <Ionicons name="add" size={28} color="#FFFFFF" />
       </TouchableOpacity>
 
-      {/* Add Planned Item Modal */}
+      {/* Add / Edit Planned Item Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('plan.add_item')}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalTitle}>
+                {editingItem ? t('plan.edit_item') : t('plan.add_item')}
+              </Text>
+              <TouchableOpacity onPress={() => { setModalVisible(false); setEditingItem(null); }}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
@@ -500,6 +560,15 @@ export default function MonthlyPlanScreen() {
                         {freqType === 'custom' ? `${freqCustomDays}d` : t('plan.freq_custom')}
                       </Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.freqChip, freqType === 'alternating' && styles.freqChipActive]}
+                      onPress={() => setFreqType('alternating')}
+                    >
+                      <Text style={[styles.freqChipText, freqType === 'alternating' && styles.freqChipTextActive]}>
+                        {t('plan.freq_alternating')}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
                   {freqType === 'custom' && (
@@ -513,6 +582,64 @@ export default function MonthlyPlanScreen() {
                         placeholder="3"
                         placeholderTextColor={colors.textMuted}
                       />
+                    </View>
+                  )}
+
+                  {freqType === 'alternating' && (
+                    <View style={styles.alternatingContainer}>
+                      <Text style={styles.subLabel}>{t('plan.days_of_week_label')}</Text>
+                      <View style={styles.daysOfWeekRow}>
+                        {[
+                          { key: 'Mon', label: t('plan.day_mon') },
+                          { key: 'Tue', label: t('plan.day_tue') },
+                          { key: 'Wed', label: t('plan.day_wed') },
+                          { key: 'Thu', label: t('plan.day_thu') },
+                          { key: 'Fri', label: t('plan.day_fri') },
+                          { key: 'Sat', label: t('plan.day_sat') },
+                          { key: 'Sun', label: t('plan.day_sun') },
+                        ].map((d) => {
+                          const isSelected = selectedDays.includes(d.key);
+                          return (
+                            <TouchableOpacity
+                              key={d.key}
+                              style={[styles.dayChip, isSelected && styles.dayChipActive]}
+                              onPress={() => {
+                                if (isSelected) {
+                                  if (selectedDays.length > 1) {
+                                    setSelectedDays(selectedDays.filter((x) => x !== d.key));
+                                  }
+                                } else {
+                                  setSelectedDays([...selectedDays, d.key]);
+                                }
+                              }}
+                            >
+                              <Text style={[styles.dayChipText, isSelected && styles.dayChipTextActive]}>
+                                {d.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      <View style={styles.qtyPerDayRow}>
+                        <Text style={styles.subLabel}>{t('plan.qty_per_day_label')}</Text>
+                        <TextInput
+                          style={styles.customDaysInput}
+                          keyboardType="numeric"
+                          value={qtyPerDay}
+                          onChangeText={setQtyPerDay}
+                          placeholder="2"
+                          placeholderTextColor={colors.textMuted}
+                        />
+                      </View>
+
+                      <Text style={styles.alternatingSummaryText}>
+                        🗓️ {t('plan.alternating_summary', {
+                          days: selectedDays.length,
+                          qty: qtyPerDay || '1',
+                          monthly: Math.round(selectedDays.length * (parseFloat(qtyPerDay) || 1) * 4.3333),
+                        })}
+                      </Text>
                     </View>
                   )}
 
@@ -587,7 +714,7 @@ export default function MonthlyPlanScreen() {
                 multiline
               />
 
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddItem}>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveItem}>
                 <Text style={styles.saveBtnText}>{t('common.save')}</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -1113,4 +1240,53 @@ const styles = StyleSheet.create({
     width: 60,
     textAlign: 'center',
   },
+  alternatingContainer: {
+    backgroundColor: colors.surfaceElevated,
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  daysOfWeekRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: 8,
+  },
+  dayChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dayChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  dayChipText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  dayChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  qtyPerDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 4,
+  },
+  alternatingSummaryText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+    marginTop: 6,
+  },
 });
+

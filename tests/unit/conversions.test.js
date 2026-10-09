@@ -43,6 +43,36 @@ function runConversionsTests() {
     assertApprox(eggs6_Unit, 300.0, 0.01, 'Eggs: 6 pack costs $300 per unit');
     assertApprox(eggs30_Unit, 250.0, 0.01, 'Eggs: 30 tray costs $250 per unit');
     assert(eggs30_Unit < eggs6_Unit, 'Eggs: Tray saves $50 per unit');
+
+    // 4. Volume / Liquids: Cooking oil (900ml for $2.700 vs 1.5L for $4.200)
+    const oil900_Price = 2700;
+    const oil900_Ml = 900;
+    const oil900_100ml = (oil900_Price / oil900_Ml) * 100; // $300 / 100ml
+    const oil900_1L = (oil900_Price / oil900_Ml) * 1000;  // $3.000 / 1L
+
+    const oil1500_Price = 4200;
+    const oil1500_Ml = 1500;
+    const oil1500_100ml = (oil1500_Price / oil1500_Ml) * 100; // $280 / 100ml
+    const oil1500_1L = (oil1500_Price / oil1500_Ml) * 1000;  // $2.800 / 1L
+
+    assertApprox(oil900_100ml, 300.0, 0.01, 'Volume: 900ml oil at $2.700 -> $300 per 100ml');
+    assertApprox(oil900_1L, 3000.0, 0.01, 'Volume: 900ml oil at $2.700 -> $3.000 per 1L');
+    assertApprox(oil1500_100ml, 280.0, 0.01, 'Volume: 1.5L oil at $4.200 -> $280 per 100ml');
+    assertApprox(oil1500_1L, 2800.0, 0.01, 'Volume: 1.5L oil at $4.200 -> $2.800 per 1L');
+    assert(oil1500_1L < oil900_1L, 'Volume: 1.5L bottle saves $200 per liter over deceptive 900ml bottle');
+
+    // 5. Multi-pack volume: 6 cans of 473ml beer ($7.200)
+    const packPrice = 7200;
+    const canMl = 473;
+    const packCans = 6;
+    const totalMl = canMl * packCans; // 2838 ml
+    const beerCostPer100ml = (packPrice / totalMl) * 100; // ~253.70
+    const beerCostPerLiter = (packPrice / totalMl) * 1000; // ~2537.00
+    const beerCostPerCan = packPrice / packCans; // $1.200
+
+    assertApprox(beerCostPer100ml, 253.70, 0.05, 'Volume Pack: 6x473ml beer -> ~$253,70 per 100ml');
+    assertApprox(beerCostPerLiter, 2536.99, 0.1, 'Volume Pack: 6x473ml beer -> ~$2.537 per 1L');
+    assertApprox(beerCostPerCan, 1200.0, 0.01, 'Volume Pack: Beer cost per individual can is $1.200');
   });
 }
 

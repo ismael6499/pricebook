@@ -9,7 +9,7 @@ interface UnitCalculatorCardProps {
 }
 
 export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProps) {
-  const [activeTab, setActiveTab] = useState<'frequency' | 'weight'>('frequency');
+  const [activeTab, setActiveTab] = useState<'frequency' | 'weight' | 'volume'>('frequency');
 
   // Amount input (defaults to unitPrice if positive, but user can freely change)
   const [customAmount, setCustomAmount] = useState<string>(unitPrice > 0 ? String(unitPrice) : '');
@@ -27,6 +27,10 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
   // Weight / Units state
   const [packageGrams, setPackageGrams] = useState('500');
   const [packageUnits, setPackageUnits] = useState('20');
+
+  // Volume state (liquids / beverages / oils)
+  const [packageVolumeMl, setPackageVolumeMl] = useState('900');
+  const [packageVolumeUnits, setPackageVolumeUnits] = useState('1');
 
   // Base numeric amount
   const parsedAmount = parseFloat(customAmount.replace(',', '.')) || (unitPrice > 0 ? unitPrice : 0);
@@ -81,6 +85,15 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
   const costPerKg = gramsNum > 0 ? (parsedAmount / gramsNum) * 1000 : 0;
   const costPerSingleUnit = unitsNum > 0 ? parsedAmount / unitsNum : 0;
 
+  // --- Calculations for Volume & Liquids Mode ---
+  const volumeNum = parseFloat(packageVolumeMl) || 0;
+  const volumeUnitsNum = parseFloat(packageVolumeUnits) || 1;
+  const totalVolumeMl = volumeNum * volumeUnitsNum;
+
+  const costPer100ml = totalVolumeMl > 0 ? (parsedAmount / totalVolumeMl) * 100 : 0;
+  const costPerLiter = totalVolumeMl > 0 ? (parsedAmount / totalVolumeMl) * 1000 : 0;
+  const costPerVolumeUnit = volumeUnitsNum > 1 ? parsedAmount / volumeUnitsNum : 0;
+
   return (
     <View style={styles.card}>
       {/* Card Header */}
@@ -122,6 +135,15 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
         >
           <Text style={[styles.tabText, activeTab === 'weight' && styles.tabTextActive]}>
             {t('unit_calculator.weight_tab')}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'volume' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('volume')}
+        >
+          <Text style={[styles.tabText, activeTab === 'volume' && styles.tabTextActive]}>
+            {t('unit_calculator.volume_tab')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -282,6 +304,83 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
                 {formatCurrency(costPerSingleUnit)}
               </Text>
             </View>
+          </View>
+        </View>
+      )}
+
+      {/* Volume Mode View */}
+      {activeTab === 'volume' && (
+        <View style={styles.sectionContent}>
+          <Text style={styles.inputLabel}>{t('unit_calculator.package_volume')}</Text>
+          <View style={styles.presetChipsRow}>
+            {[
+              { label: '500ml', val: '500' },
+              { label: '900ml', val: '900' },
+              { label: '1L', val: '1000' },
+              { label: '1.5L', val: '1500' },
+              { label: '2.25L', val: '2250' },
+              { label: '5L', val: '5000' },
+            ].map((preset) => (
+              <TouchableOpacity
+                key={preset.val}
+                style={[styles.chip, packageVolumeMl === preset.val && styles.chipActive]}
+                onPress={() => setPackageVolumeMl(preset.val)}
+              >
+                <Text style={[styles.chipText, packageVolumeMl === preset.val && styles.chipTextActive]}>
+                  {preset.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.inputsRow}>
+            <View style={styles.inputCol}>
+              <Text style={styles.inputLabel}>{t('unit_calculator.package_volume')}</Text>
+              <TextInput
+                style={styles.input}
+                value={packageVolumeMl}
+                onChangeText={setPackageVolumeMl}
+                keyboardType="numeric"
+                placeholder={t('unit_calculator.package_volume_placeholder')}
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.inputCol}>
+              <Text style={styles.inputLabel}>{t('unit_calculator.package_units')}</Text>
+              <TextInput
+                style={styles.input}
+                value={packageVolumeUnits}
+                onChangeText={setPackageVolumeUnits}
+                keyboardType="numeric"
+                placeholder={t('unit_calculator.package_units_placeholder')}
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+          </View>
+
+          {/* Results Grid */}
+          <View style={styles.metricsGrid}>
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_100ml')}</Text>
+              <Text style={styles.metricValue}>{formatCurrency(costPer100ml)}</Text>
+            </View>
+
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_liter')}</Text>
+              <Text style={[styles.metricValue, { color: colors.primary }]}>
+                {formatCurrency(costPerLiter)}
+              </Text>
+            </View>
+
+            {volumeUnitsNum > 1 && (
+              <View style={styles.metricBox}>
+                <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_unit')}</Text>
+                <Text style={[styles.metricValue, { color: colors.warning }]}>
+                  {formatCurrency(costPerVolumeUnit)}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       )}
