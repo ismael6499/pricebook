@@ -6,8 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import {
   getMonthlySummary,
   settleAllPendingPurchases,
@@ -23,6 +25,7 @@ export default function SettlementScreen() {
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
   const [history, setHistory] = useState<Settlement[]>([]);
   const [lastSettlementId, setLastSettlementId] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -39,6 +42,21 @@ export default function SettlementScreen() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadData]);
 
   const handleSettleAll = () => {
@@ -107,7 +125,18 @@ export default function SettlementScreen() {
   const hasPending = summary.total_pending_to_repay > 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
+      }
+    >
       {/* Undo Banner if recently settled */}
       {lastSettlementId && (
         <View style={styles.undoBanner}>

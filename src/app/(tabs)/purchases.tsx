@@ -9,8 +9,10 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import {
   getPurchases,
   getAllProducts,
@@ -34,6 +36,7 @@ export default function PurchasesScreen() {
   const [customDaysInput, setCustomDaysInput] = useState<string>('15');
   const [customModalVisible, setCustomModalVisible] = useState(false);
   const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'purchase' | 'reference'>('all');
+  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
   // New purchase form
@@ -68,6 +71,21 @@ export default function PurchasesScreen() {
   useEffect(() => {
     loadData();
     fetchUsdBlueRate().then((r) => setUsdRate(r));
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadData]);
 
   const handleToggleStatus = async (item: Purchase) => {
@@ -352,6 +370,14 @@ export default function PurchasesScreen() {
         keyExtractor={(item) => String(item.id)}
         renderItem={renderPurchaseItem}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />

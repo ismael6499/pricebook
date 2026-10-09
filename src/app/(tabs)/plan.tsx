@@ -9,9 +9,10 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   getMonthlyPlanItems,
   createMonthlyPlanItem,
@@ -19,6 +20,7 @@ import {
   getAllProducts,
   createProduct,
   createPurchase,
+  syncPlanPricesToProducts,
   MonthlyPlanItem,
 } from '../../db/database';
 import { colors } from '../../constants/theme';
@@ -27,6 +29,7 @@ import { t, formatCurrency, formatPercent } from '../../i18n';
 export default function MonthlyPlanScreen() {
   const router = useRouter();
   const [items, setItems] = useState<MonthlyPlanItem[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [quickCalcModalVisible, setQuickCalcModalVisible] = useState(false);
 
@@ -57,6 +60,22 @@ export default function MonthlyPlanScreen() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await syncPlanPricesToProducts();
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadData]);
 
   const totalBudget = items.reduce((acc, it) => acc + it.estimated_monthly_total, 0);
@@ -356,6 +375,14 @@ export default function MonthlyPlanScreen() {
         keyExtractor={(it) => String(it.id)}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="clipboard-outline" size={48} color={colors.textMuted} />

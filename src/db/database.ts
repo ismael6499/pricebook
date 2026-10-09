@@ -299,10 +299,7 @@ export async function deleteCategory(id: number): Promise<void> {
 
 export async function getAllProducts(searchQuery: string = '', categoryFilter: string = 'All'): Promise<Product[]> {
   const db = await getDatabase();
-  if (!hasSyncedPlanPrices) {
-    await syncPlanPricesToProducts(db);
-    hasSyncedPlanPrices = true;
-  }
+  await syncPlanPricesToProducts(db);
   
   let sql = `
     SELECT p.*,
@@ -349,10 +346,7 @@ export async function getAllProducts(searchQuery: string = '', categoryFilter: s
 
 export async function getProductById(id: number): Promise<Product | null> {
   const db = await getDatabase();
-  if (!hasSyncedPlanPrices) {
-    await syncPlanPricesToProducts(db);
-    hasSyncedPlanPrices = true;
-  }
+  await syncPlanPricesToProducts(db);
   const row = await db.getFirstAsync<Product>(
     `SELECT p.*,
       COALESCE(
@@ -398,6 +392,7 @@ export async function createProduct(data: {
     data.notes || null,
     data.image_uri || null
   );
+  await syncPlanPricesToProducts(db);
   return res.lastInsertRowId;
 }
 
@@ -894,6 +889,7 @@ export async function createMonthlyPlanItem(data: {
     total,
     data.notes || null
   );
+  await syncPlanPricesToProducts(db);
   return res.lastInsertRowId;
 }
 
@@ -923,6 +919,7 @@ export async function updateMonthlyPlanItem(
     data.notes || null,
     id
   );
+  await syncPlanPricesToProducts(db);
 }
 
 export async function deleteMonthlyPlanItem(id: number): Promise<void> {

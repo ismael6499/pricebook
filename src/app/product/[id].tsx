@@ -10,8 +10,9 @@ import {
   Modal,
   TextInput,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polyline, Circle, Line, Text as SvgText } from 'react-native-svg';
 import {
@@ -40,6 +41,7 @@ export default function ProductDetailScreen() {
 
   const [product, setProduct] = useState<Product | null>(null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [purchaseModalVisible, setPurchaseModalVisible] = useState(false);
   const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
 
@@ -68,6 +70,21 @@ export default function ProductDetailScreen() {
   useEffect(() => {
     loadData();
     fetchUsdBlueRate().then((rate) => setUsdRate(rate));
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadData]);
 
   const handlePhotoSelected = async (uri: string | null) => {
@@ -248,7 +265,18 @@ export default function ProductDetailScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
+      }
+    >
       {/* Hero Header */}
       <View style={styles.heroCard}>
         <TouchableOpacity style={styles.photoContainer} onPress={() => setPhotoPickerVisible(true)}>

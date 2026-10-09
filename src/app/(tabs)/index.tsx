@@ -10,13 +10,15 @@ import {
   Modal,
   Alert,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getAllProducts,
   getCategories,
   createProduct,
+  syncPlanPricesToProducts,
   Product,
   Category,
 } from '../../db/database';
@@ -31,6 +33,7 @@ export default function ProductsScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
@@ -57,6 +60,22 @@ export default function ProductsScreen() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await syncPlanPricesToProducts();
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadData]);
 
   const handleCreateProduct = async () => {
@@ -211,6 +230,14 @@ export default function ProductsScreen() {
         keyExtractor={(item) => String(item.id)}
         renderItem={renderProductItem}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="bag-handle-outline" size={48} color={colors.textMuted} />
