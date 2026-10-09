@@ -11,37 +11,53 @@ interface UnitCalculatorCardProps {
 export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProps) {
   const [activeTab, setActiveTab] = useState<'frequency' | 'weight'>('frequency');
 
-  // Frequency state
-  const [frequencyPreset, setFrequencyPreset] = useState<'1_day' | '2_day' | '1_week' | 'custom'>('1_day');
-  const [customDaysPerUnit, setCustomDaysPerUnit] = useState('3'); // e.g., 1 pack every 3 days
+  // Amount input (defaults to unitPrice if positive, but user can freely change)
+  const [customAmount, setCustomAmount] = useState<string>(unitPrice > 0 ? String(unitPrice) : '');
+
+  // Frequency basis
+  const [basis, setBasis] = useState<'week' | 'day' | 'custom' | 'month'>('week');
+  const [customDays, setCustomDays] = useState('3');
 
   // Weight / Units state
   const [packageGrams, setPackageGrams] = useState('500');
   const [packageUnits, setPackageUnits] = useState('20');
 
-  // --- Calculations for Frequency Mode ---
+  // Base numeric amount
+  const parsedAmount = parseFloat(customAmount.replace(',', '.')) || (unitPrice > 0 ? unitPrice : 0);
+
+  // --- Frequency & Homologation Calculations ---
   let costPerDay = 0;
   let costPerWeek = 0;
-  let costPerMonth = 0;
+  let costPerMonth30 = 0;
+  let costPerMonth31 = 0;
+  let costPerMonthAvg = 0;
 
-  if (unitPrice > 0) {
-    if (frequencyPreset === '1_day') {
-      costPerDay = unitPrice;
-      costPerWeek = unitPrice * 7;
-      costPerMonth = unitPrice * 30;
-    } else if (frequencyPreset === '2_day') {
-      costPerDay = unitPrice * 2;
-      costPerWeek = unitPrice * 14;
-      costPerMonth = unitPrice * 60;
-    } else if (frequencyPreset === '1_week') {
-      costPerWeek = unitPrice;
-      costPerDay = unitPrice / 7;
-      costPerMonth = (unitPrice / 7) * 30;
-    } else if (frequencyPreset === 'custom') {
-      const days = parseFloat(customDaysPerUnit) || 1;
-      costPerDay = unitPrice / days;
-      costPerWeek = (unitPrice / days) * 7;
-      costPerMonth = (unitPrice / days) * 30;
+  if (parsedAmount > 0) {
+    if (basis === 'week') {
+      costPerWeek = parsedAmount;
+      costPerDay = parsedAmount / 7;
+      costPerMonth30 = (parsedAmount / 7) * 30;
+      costPerMonth31 = (parsedAmount / 7) * 31;
+      costPerMonthAvg = parsedAmount * (52 / 12); // ~4.3333 weeks
+    } else if (basis === 'day') {
+      costPerDay = parsedAmount;
+      costPerWeek = parsedAmount * 7;
+      costPerMonth30 = parsedAmount * 30;
+      costPerMonth31 = parsedAmount * 31;
+      costPerMonthAvg = parsedAmount * 30.4167;
+    } else if (basis === 'month') {
+      costPerMonth30 = parsedAmount;
+      costPerMonth31 = parsedAmount;
+      costPerMonthAvg = parsedAmount;
+      costPerDay = parsedAmount / 30.4167;
+      costPerWeek = (parsedAmount / 30.4167) * 7;
+    } else if (basis === 'custom') {
+      const days = parseFloat(customDays) || 1;
+      costPerDay = parsedAmount / days;
+      costPerWeek = (parsedAmount / days) * 7;
+      costPerMonth30 = (parsedAmount / days) * 30;
+      costPerMonth31 = (parsedAmount / days) * 31;
+      costPerMonthAvg = (parsedAmount / days) * 30.4167;
     }
   }
 
@@ -49,9 +65,9 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
   const gramsNum = parseFloat(packageGrams) || 0;
   const unitsNum = parseFloat(packageUnits) || 0;
 
-  const costPer100g = gramsNum > 0 ? (unitPrice / gramsNum) * 100 : 0;
-  const costPerKg = gramsNum > 0 ? (unitPrice / gramsNum) * 1000 : 0;
-  const costPerSingleUnit = unitsNum > 0 ? unitPrice / unitsNum : 0;
+  const costPer100g = gramsNum > 0 ? (parsedAmount / gramsNum) * 100 : 0;
+  const costPerKg = gramsNum > 0 ? (parsedAmount / gramsNum) * 1000 : 0;
+  const costPerSingleUnit = unitsNum > 0 ? parsedAmount / unitsNum : 0;
 
   return (
     <View style={styles.card}>
@@ -62,6 +78,19 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
           <Text style={styles.title}>{t('unit_calculator.title')}</Text>
         </View>
         <Text style={styles.subtitle}>{t('unit_calculator.subtitle')}</Text>
+      </View>
+
+      {/* Amount Input */}
+      <View style={styles.amountInputContainer}>
+        <Text style={styles.inputLabel}>{t('unit_calculator.amount_label')} ($)</Text>
+        <TextInput
+          style={styles.amountInput}
+          value={customAmount}
+          onChangeText={setCustomAmount}
+          keyboardType="numeric"
+          placeholder={unitPrice > 0 ? String(unitPrice) : t('unit_calculator.amount_placeholder')}
+          placeholderTextColor={colors.textMuted}
+        />
       </View>
 
       {/* Mode Tabs */}
@@ -92,34 +121,48 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
 
           <View style={styles.presetChipsRow}>
             <TouchableOpacity
-              style={[styles.chip, frequencyPreset === '1_day' && styles.chipActive]}
-              onPress={() => setFrequencyPreset('1_day')}
+              style={[styles.chip, basis === 'week' && styles.chipActive]}
+              onPress={() => setBasis('week')}
             >
-              <Text style={[styles.chipText, frequencyPreset === '1_day' && styles.chipTextActive]}>
+              <Text style={[styles.chipText, basis === 'week' && styles.chipTextActive]}>
+                {t('unit_calculator.rate_1_per_week')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.chip, basis === 'day' && styles.chipActive]}
+              onPress={() => setBasis('day')}
+            >
+              <Text style={[styles.chipText, basis === 'day' && styles.chipTextActive]}>
                 {t('unit_calculator.rate_1_per_day')}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.chip, frequencyPreset === '2_day' && styles.chipActive]}
-              onPress={() => setFrequencyPreset('2_day')}
+              style={[styles.chip, basis === 'custom' && styles.chipActive]}
+              onPress={() => setBasis('custom')}
             >
-              <Text style={[styles.chipText, frequencyPreset === '2_day' && styles.chipTextActive]}>
-                {t('unit_calculator.rate_2_per_day')}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.chip, frequencyPreset === '1_week' && styles.chipActive]}
-              onPress={() => setFrequencyPreset('1_week')}
-            >
-              <Text style={[styles.chipText, frequencyPreset === '1_week' && styles.chipTextActive]}>
-                {t('unit_calculator.rate_1_per_week')}
+              <Text style={[styles.chipText, basis === 'custom' && styles.chipTextActive]}>
+                {basis === 'custom' ? `${customDays}d` : t('unit_calculator.rate_custom_days')}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Results Grid */}
+          {basis === 'custom' && (
+            <View style={styles.customDaysRow}>
+              <Text style={styles.subLabel}>Days per period:</Text>
+              <TextInput
+                style={styles.customDaysInput}
+                keyboardType="numeric"
+                value={customDays}
+                onChangeText={setCustomDays}
+                placeholder="3"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+          )}
+
+          {/* Daily & Weekly Homologation Grid */}
           <View style={styles.metricsGrid}>
             <View style={styles.metricBox}>
               <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_day')}</Text>
@@ -128,15 +171,36 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
 
             <View style={styles.metricBox}>
               <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_week')}</Text>
-              <Text style={styles.metricValue}>{formatCurrency(costPerWeek)}</Text>
-            </View>
-
-            <View style={styles.metricBox}>
-              <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_month')}</Text>
-              <Text style={[styles.metricValue, { color: colors.warning }]}>
-                {formatCurrency(costPerMonth)}
+              <Text style={[styles.metricValue, { color: colors.primary }]}>
+                {formatCurrency(costPerWeek)}
               </Text>
             </View>
+          </View>
+
+          {/* Monthly 30/31 Projections Card */}
+          <View style={styles.monthlyProjectionCard}>
+            <Text style={styles.monthlyCardTitle}>{t('plan.homologated_projection')}</Text>
+            <View style={styles.monthlyColumnsRow}>
+              <View style={styles.monthColumn}>
+                <Text style={styles.monthColLabel}>{t('unit_calculator.month_30_days')}</Text>
+                <Text style={styles.monthColValue}>{formatCurrency(costPerMonth30)}</Text>
+              </View>
+              <View style={styles.monthDivider} />
+              <View style={styles.monthColumn}>
+                <Text style={styles.monthColLabel}>{t('unit_calculator.month_31_days')}</Text>
+                <Text style={styles.monthColValue}>{formatCurrency(costPerMonth31)}</Text>
+              </View>
+              <View style={styles.monthDivider} />
+              <View style={styles.monthColumn}>
+                <Text style={styles.monthColLabel}>{t('unit_calculator.month_avg_weeks')}</Text>
+                <Text style={[styles.monthColValue, { color: colors.warning }]}>
+                  {formatCurrency(costPerMonthAvg)}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.hintFooter}>
+              💡 {t('unit_calculator.homologation_hint')}
+            </Text>
           </View>
         </View>
       )}
@@ -205,7 +269,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   header: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   titleRow: {
     flexDirection: 'row',
@@ -222,12 +286,27 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
+  amountInputContainer: {
+    marginBottom: 14,
+  },
+  amountInput: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 4,
+  },
   tabsRow: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceElevated,
     borderRadius: 10,
     padding: 3,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   tabBtn: {
     flex: 1,
@@ -282,6 +361,28 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
+  customDaysRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  subLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  customDaysInput: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    color: colors.text,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    width: 60,
+    textAlign: 'center',
+  },
   inputsRow: {
     flexDirection: 'row',
     gap: 12,
@@ -323,5 +424,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.success,
+  },
+  monthlyProjectionCard: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 4,
+  },
+  monthlyCardTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  monthlyColumnsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  monthColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  monthColLabel: {
+    fontSize: 10,
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  monthColValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  monthDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: colors.border,
+  },
+  hintFooter: {
+    fontSize: 10,
+    color: colors.textMuted,
+    marginTop: 10,
+    fontStyle: 'italic',
   },
 });

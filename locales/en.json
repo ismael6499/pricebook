@@ -68,10 +68,17 @@
     "package_weight_placeholder": "e.g. 500",
     "package_units": "Units in package",
     "package_units_placeholder": "e.g. 20",
-    "consumption_rate": "Consumption rate",
-    "rate_1_per_day": "1 per day",
-    "rate_2_per_day": "2 per day",
-    "rate_1_per_week": "1 per week"
+    "consumption_rate": "Calculation Basis",
+    "rate_1_per_day": "Per Day",
+    "rate_2_per_day": "2 per Day",
+    "rate_1_per_week": "Per Week",
+    "rate_custom_days": "Every N Days",
+    "amount_label": "Amount Paid",
+    "amount_placeholder": "e.g. 15000",
+    "month_30_days": "Month (30 days)",
+    "month_31_days": "Month (31 days)",
+    "month_avg_weeks": "Avg Month (4.33 wks)",
+    "homologation_hint": "A calendar month has ~4.33 weeks (30.4 days avg)."
   },
   "products": {
     "title": "Products",
@@ -213,6 +220,17 @@
     "real_vs_plan": "Real Price vs Planned",
     "delete_confirm": "Are you sure you want to delete this planned item?",
     "record_as_purchase": "Record as Real Purchase",
-    "notes": "Plan Notes"
+    "notes": "Plan Notes",
+    "calc_mode": "Input Mode",
+    "mode_frequency": "By Frequency (Weekly / Daily)",
+    "mode_standard": "Unit Price × Quantity",
+    "freq_label": "Payment Frequency",
+    "freq_daily": "Daily (every day)",
+    "freq_weekly": "Weekly (once a week)",
+    "freq_biweekly": "Biweekly (every 15 days)",
+    "freq_monthly": "Monthly",
+    "homologate_btn": "Quick Calculator",
+    "homologated_projection": "Monthly Projection (30 - 31 days)",
+    "quick_calculator_title": "Spending Homologator"
   }
 }

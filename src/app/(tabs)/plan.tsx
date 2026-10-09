@@ -27,13 +27,21 @@ export default function MonthlyPlanScreen() {
   const router = useRouter();
   const [items, setItems] = useState<MonthlyPlanItem[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [quickCalcModalVisible, setQuickCalcModalVisible] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
+  const [calcMode, setCalcMode] = useState<'frequency' | 'standard'>('frequency');
+  const [freqAmount, setFreqAmount] = useState('15000');
+  const [freqType, setFreqType] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly'>('weekly');
   const [unitDesc, setUnitDesc] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [monthlyQty, setMonthlyQty] = useState('1');
   const [notes, setNotes] = useState('');
+
+  // Quick Calculator state
+  const [quickAmount, setQuickAmount] = useState('15000');
+  const [quickFreq, setQuickFreq] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly'>('weekly');
 
   const loadData = useCallback(async () => {
     try {
@@ -50,27 +58,134 @@ export default function MonthlyPlanScreen() {
 
   const totalBudget = items.reduce((acc, it) => acc + it.estimated_monthly_total, 0);
 
+  // Frequency calculations helper for form
+  const freqAmountNum = parseFloat(freqAmount.replace(',', '.')) || 0;
+  let homDay = 0;
+  let homWeek = 0;
+  let homMonth30 = 0;
+  let homMonth31 = 0;
+  let homMonthAvg = 0;
+
+  if (freqAmountNum > 0) {
+    if (freqType === 'weekly') {
+      homDay = freqAmountNum / 7;
+      homWeek = freqAmountNum;
+      homMonth30 = (freqAmountNum / 7) * 30;
+      homMonth31 = (freqAmountNum / 7) * 31;
+      homMonthAvg = freqAmountNum * (52 / 12);
+    } else if (freqType === 'daily') {
+      homDay = freqAmountNum;
+      homWeek = freqAmountNum * 7;
+      homMonth30 = freqAmountNum * 30;
+      homMonth31 = freqAmountNum * 31;
+      homMonthAvg = freqAmountNum * 30.4167;
+    } else if (freqType === 'biweekly') {
+      homDay = freqAmountNum / 14;
+      homWeek = (freqAmountNum / 14) * 7;
+      homMonth30 = (freqAmountNum / 14) * 30;
+      homMonth31 = (freqAmountNum / 14) * 31;
+      homMonthAvg = freqAmountNum * 2.1667;
+    } else if (freqType === 'monthly') {
+      homDay = freqAmountNum / 30.4167;
+      homWeek = (freqAmountNum / 30.4167) * 7;
+      homMonth30 = freqAmountNum;
+      homMonth31 = freqAmountNum;
+      homMonthAvg = freqAmountNum;
+    }
+  }
+
+  // Quick calculator calculations
+  const quickAmountNum = parseFloat(quickAmount.replace(',', '.')) || 0;
+  let qDay = 0;
+  let qWeek = 0;
+  let qMonth30 = 0;
+  let qMonth31 = 0;
+  let qMonthAvg = 0;
+
+  if (quickAmountNum > 0) {
+    if (quickFreq === 'weekly') {
+      qDay = quickAmountNum / 7;
+      qWeek = quickAmountNum;
+      qMonth30 = (quickAmountNum / 7) * 30;
+      qMonth31 = (quickAmountNum / 7) * 31;
+      qMonthAvg = quickAmountNum * (52 / 12);
+    } else if (quickFreq === 'daily') {
+      qDay = quickAmountNum;
+      qWeek = quickAmountNum * 7;
+      qMonth30 = quickAmountNum * 30;
+      qMonth31 = quickAmountNum * 31;
+      qMonthAvg = quickAmountNum * 30.4167;
+    } else if (quickFreq === 'biweekly') {
+      qDay = quickAmountNum / 14;
+      qWeek = (quickAmountNum / 14) * 7;
+      qMonth30 = (quickAmountNum / 14) * 30;
+      qMonth31 = (quickAmountNum / 14) * 31;
+      qMonthAvg = quickAmountNum * 2.1667;
+    } else if (quickFreq === 'monthly') {
+      qDay = quickAmountNum / 30.4167;
+      qWeek = (quickAmountNum / 30.4167) * 7;
+      qMonth30 = quickAmountNum;
+      qMonth31 = quickAmountNum;
+      qMonthAvg = quickAmountNum;
+    }
+  }
+
   const handleAddItem = async () => {
     if (!name.trim()) {
       Alert.alert(t('common.error'), 'Item name is required');
       return;
     }
-    const priceNum = parseFloat(unitPrice.replace(',', '.')) || 0;
-    const qtyNum = parseFloat(monthlyQty.replace(',', '.')) || 1;
 
     try {
-      await createMonthlyPlanItem({
-        name: name.trim(),
-        unit_desc: unitDesc.trim() || undefined,
-        estimated_unit_price: priceNum,
-        estimated_monthly_qty: qtyNum,
-        notes: notes.trim() || undefined,
-      });
+      if (calcMode === 'frequency') {
+        if (freqAmountNum <= 0) {
+          Alert.alert(t('common.error'), 'Please enter a valid amount');
+          return;
+        }
+
+        let finalUnitDesc = '';
+        let finalQty = 1;
+        let finalUnitPrice = freqAmountNum;
+
+        if (freqType === 'weekly') {
+          finalUnitDesc = `1/sem (${formatCurrency(freqAmountNum)})`;
+          finalQty = 4.33;
+        } else if (freqType === 'daily') {
+          finalUnitDesc = `1/día (${formatCurrency(freqAmountNum)})`;
+          finalQty = 30.4;
+        } else if (freqType === 'biweekly') {
+          finalUnitDesc = `c/15d (${formatCurrency(freqAmountNum)})`;
+          finalQty = 2.17;
+        } else {
+          finalUnitDesc = `1/mes (${formatCurrency(freqAmountNum)})`;
+          finalQty = 1;
+        }
+
+        await createMonthlyPlanItem({
+          name: name.trim(),
+          unit_desc: finalUnitDesc,
+          estimated_unit_price: finalUnitPrice,
+          estimated_monthly_qty: finalQty,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        const priceNum = parseFloat(unitPrice.replace(',', '.')) || 0;
+        const qtyNum = parseFloat(monthlyQty.replace(',', '.')) || 1;
+
+        await createMonthlyPlanItem({
+          name: name.trim(),
+          unit_desc: unitDesc.trim() || undefined,
+          estimated_unit_price: priceNum,
+          estimated_monthly_qty: qtyNum,
+          notes: notes.trim() || undefined,
+        });
+      }
 
       setName('');
       setUnitDesc('');
       setUnitPrice('');
       setMonthlyQty('1');
+      setFreqAmount('15000');
       setNotes('');
       setModalVisible(false);
       loadData();
@@ -176,8 +291,17 @@ export default function MonthlyPlanScreen() {
           <Text style={styles.bannerLabel}>{t('plan.total_budget')}</Text>
           <Text style={styles.bannerAmount}>{formatCurrency(totalBudget)}</Text>
         </View>
-        <View style={styles.bannerCount}>
-          <Text style={styles.bannerCountText}>{items.length} Habitual Items</Text>
+        <View style={styles.bannerRight}>
+          <TouchableOpacity
+            style={styles.quickCalcBannerBtn}
+            onPress={() => setQuickCalcModalVisible(true)}
+          >
+            <Ionicons name="calculator-outline" size={14} color={colors.primary} />
+            <Text style={styles.quickCalcBannerText}>{t('plan.homologate_btn')}</Text>
+          </TouchableOpacity>
+          <View style={styles.bannerCount}>
+            <Text style={styles.bannerCountText}>{items.length} items</Text>
+          </View>
         </View>
       </View>
 
@@ -216,6 +340,27 @@ export default function MonthlyPlanScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Mode Toggle: Frequency vs Standard */}
+              <View style={styles.modeTabsRow}>
+                <TouchableOpacity
+                  style={[styles.modeTabBtn, calcMode === 'frequency' && styles.modeTabBtnActive]}
+                  onPress={() => setCalcMode('frequency')}
+                >
+                  <Text style={[styles.modeTabText, calcMode === 'frequency' && styles.modeTabTextActive]}>
+                    {t('plan.mode_frequency')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modeTabBtn, calcMode === 'standard' && styles.modeTabBtnActive]}
+                  onPress={() => setCalcMode('standard')}
+                >
+                  <Text style={[styles.modeTabText, calcMode === 'standard' && styles.modeTabTextActive]}>
+                    {t('plan.mode_standard')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.inputLabel}>{t('plan.item_name')}</Text>
               <TextInput
                 style={styles.modalInput}
@@ -225,34 +370,117 @@ export default function MonthlyPlanScreen() {
                 onChangeText={setName}
               />
 
-              <Text style={styles.inputLabel}>{t('plan.unit_desc')}</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. 1 x día, 8 paq / mes, 4 semanas"
-                placeholderTextColor={colors.textMuted}
-                value={unitDesc}
-                onChangeText={setUnitDesc}
-              />
+              {calcMode === 'frequency' ? (
+                <>
+                  <Text style={styles.inputLabel}>{t('plan.spent_amount')} ($)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 15000"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={freqAmount}
+                    onChangeText={setFreqAmount}
+                  />
 
-              <Text style={styles.inputLabel}>{t('plan.estimated_unit_price')} ($)</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. 5000"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="numeric"
-                value={unitPrice}
-                onChangeText={setUnitPrice}
-              />
+                  <Text style={styles.inputLabel}>{t('plan.freq_label')}</Text>
+                  <View style={styles.freqChipsRow}>
+                    <TouchableOpacity
+                      style={[styles.freqChip, freqType === 'weekly' && styles.freqChipActive]}
+                      onPress={() => setFreqType('weekly')}
+                    >
+                      <Text style={[styles.freqChipText, freqType === 'weekly' && styles.freqChipTextActive]}>
+                        {t('plan.freq_weekly')}
+                      </Text>
+                    </TouchableOpacity>
 
-              <Text style={styles.inputLabel}>{t('plan.monthly_qty')}</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. 31, 8, 4"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="numeric"
-                value={monthlyQty}
-                onChangeText={setMonthlyQty}
-              />
+                    <TouchableOpacity
+                      style={[styles.freqChip, freqType === 'daily' && styles.freqChipActive]}
+                      onPress={() => setFreqType('daily')}
+                    >
+                      <Text style={[styles.freqChipText, freqType === 'daily' && styles.freqChipTextActive]}>
+                        {t('plan.freq_daily')}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.freqChip, freqType === 'biweekly' && styles.freqChipActive]}
+                      onPress={() => setFreqType('biweekly')}
+                    >
+                      <Text style={[styles.freqChipText, freqType === 'biweekly' && styles.freqChipTextActive]}>
+                        {t('plan.freq_biweekly')}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.freqChip, freqType === 'monthly' && styles.freqChipActive]}
+                      onPress={() => setFreqType('monthly')}
+                    >
+                      <Text style={[styles.freqChipText, freqType === 'monthly' && styles.freqChipTextActive]}>
+                        {t('plan.freq_monthly')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Live Projections Card */}
+                  <View style={styles.homologationCard}>
+                    <Text style={styles.homologationTitle}>{t('plan.homologated_projection')}</Text>
+                    <View style={styles.homologationRow}>
+                      <View style={styles.homologationItem}>
+                        <Text style={styles.homologationLabel}>{t('unit_calculator.cost_per_day')}</Text>
+                        <Text style={styles.homologationVal}>{formatCurrency(homDay)}</Text>
+                      </View>
+                      <View style={styles.homologationDivider} />
+                      <View style={styles.homologationItem}>
+                        <Text style={styles.homologationLabel}>{t('unit_calculator.cost_per_week')}</Text>
+                        <Text style={styles.homologationVal}>{formatCurrency(homWeek)}</Text>
+                      </View>
+                      <View style={styles.homologationDivider} />
+                      <View style={styles.homologationItem}>
+                        <Text style={styles.homologationLabel}>{t('unit_calculator.month_avg_weeks')}</Text>
+                        <Text style={[styles.homologationVal, { color: colors.warning }]}>
+                          {formatCurrency(homMonthAvg)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.daysBreakdownRow}>
+                      <Text style={styles.daysBreakdownText}>
+                        30d: <Text style={styles.daysBreakdownVal}>{formatCurrency(homMonth30)}</Text> • 31d: <Text style={styles.daysBreakdownVal}>{formatCurrency(homMonth31)}</Text>
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.inputLabel}>{t('plan.unit_desc')}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 1 x día, 8 paq / mes, 4 semanas"
+                    placeholderTextColor={colors.textMuted}
+                    value={unitDesc}
+                    onChangeText={setUnitDesc}
+                  />
+
+                  <Text style={styles.inputLabel}>{t('plan.estimated_unit_price')} ($)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 5000"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={unitPrice}
+                    onChangeText={setUnitPrice}
+                  />
+
+                  <Text style={styles.inputLabel}>{t('plan.monthly_qty')}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 31, 8, 4"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={monthlyQty}
+                    onChangeText={setMonthlyQty}
+                  />
+                </>
+              )}
 
               <Text style={styles.inputLabel}>{t('plan.notes')}</Text>
               <TextInput
@@ -266,6 +494,118 @@ export default function MonthlyPlanScreen() {
 
               <TouchableOpacity style={styles.saveBtn} onPress={handleAddItem}>
                 <Text style={styles.saveBtnText}>{t('common.save')}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Quick Homologator Modal */}
+      <Modal visible={quickCalcModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="calculator-outline" size={20} color={colors.primary} />
+                <Text style={styles.modalTitle}>{t('plan.quick_calculator_title')}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setQuickCalcModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>{t('plan.spent_amount')} ($)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. 15000"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={quickAmount}
+                onChangeText={setQuickAmount}
+              />
+
+              <Text style={styles.inputLabel}>{t('plan.freq_label')}</Text>
+              <View style={styles.freqChipsRow}>
+                <TouchableOpacity
+                  style={[styles.freqChip, quickFreq === 'weekly' && styles.freqChipActive]}
+                  onPress={() => setQuickFreq('weekly')}
+                >
+                  <Text style={[styles.freqChipText, quickFreq === 'weekly' && styles.freqChipTextActive]}>
+                    {t('plan.freq_weekly')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.freqChip, quickFreq === 'daily' && styles.freqChipActive]}
+                  onPress={() => setQuickFreq('daily')}
+                >
+                  <Text style={[styles.freqChipText, quickFreq === 'daily' && styles.freqChipTextActive]}>
+                    {t('plan.freq_daily')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.freqChip, quickFreq === 'biweekly' && styles.freqChipActive]}
+                  onPress={() => setQuickFreq('biweekly')}
+                >
+                  <Text style={[styles.freqChipText, quickFreq === 'biweekly' && styles.freqChipTextActive]}>
+                    {t('plan.freq_biweekly')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.freqChip, quickFreq === 'monthly' && styles.freqChipActive]}
+                  onPress={() => setQuickFreq('monthly')}
+                >
+                  <Text style={[styles.freqChipText, quickFreq === 'monthly' && styles.freqChipTextActive]}>
+                    {t('plan.freq_monthly')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Homologation Breakdown */}
+              <View style={[styles.homologationCard, { marginTop: 16 }]}>
+                <Text style={styles.homologationTitle}>{t('plan.homologated_projection')}</Text>
+                <View style={styles.homologationRow}>
+                  <View style={styles.homologationItem}>
+                    <Text style={styles.homologationLabel}>{t('unit_calculator.cost_per_day')}</Text>
+                    <Text style={styles.homologationVal}>{formatCurrency(qDay)}</Text>
+                  </View>
+                  <View style={styles.homologationDivider} />
+                  <View style={styles.homologationItem}>
+                    <Text style={styles.homologationLabel}>{t('unit_calculator.cost_per_week')}</Text>
+                    <Text style={styles.homologationVal}>{formatCurrency(qWeek)}</Text>
+                  </View>
+                  <View style={styles.homologationDivider} />
+                  <View style={styles.homologationItem}>
+                    <Text style={styles.homologationLabel}>{t('unit_calculator.month_avg_weeks')}</Text>
+                    <Text style={[styles.homologationVal, { color: colors.warning }]}>
+                      {formatCurrency(qMonthAvg)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.daysBreakdownRow}>
+                  <Text style={styles.daysBreakdownText}>
+                    30d: <Text style={styles.daysBreakdownVal}>{formatCurrency(qMonth30)}</Text> • 31d: <Text style={styles.daysBreakdownVal}>{formatCurrency(qMonth31)}</Text>
+                  </Text>
+                </View>
+                <Text style={[styles.hintFooter, { marginTop: 10 }]}>
+                  💡 {t('unit_calculator.homologation_hint')}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { marginTop: 16 }]}
+                onPress={() => {
+                  setFreqAmount(quickAmount);
+                  setFreqType(quickFreq);
+                  setCalcMode('frequency');
+                  setQuickCalcModalVisible(false);
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.saveBtnText}>+ {t('plan.add_item')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -293,6 +633,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  bannerRight: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  quickCalcBannerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 4,
+  },
+  quickCalcBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
   bannerLabel: {
     fontSize: 11,
     color: colors.textMuted,
@@ -315,6 +675,116 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
+  },
+  modeTabsRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 12,
+  },
+  modeTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  modeTabBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  modeTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  modeTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  freqChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 6,
+  },
+  freqChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  freqChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  freqChipText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  freqChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  homologationCard: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  homologationTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  homologationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  homologationItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  homologationLabel: {
+    fontSize: 10,
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  homologationVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  homologationDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: colors.border,
+  },
+  daysBreakdownRow: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  daysBreakdownText: {
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  daysBreakdownVal: {
+    fontWeight: '700',
+    color: colors.text,
+  },
+  hintFooter: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   listContent: {
     paddingHorizontal: 16,

@@ -68,10 +68,17 @@
     "package_weight_placeholder": "ej. 500",
     "package_units": "Unidades por envase",
     "package_units_placeholder": "ej. 20",
-    "consumption_rate": "Ritmo de consumo",
-    "rate_1_per_day": "1 por día",
-    "rate_2_per_day": "2 por día",
-    "rate_1_per_week": "1 por semana"
+    "consumption_rate": "Base de Cálculo",
+    "rate_1_per_day": "Por Día",
+    "rate_2_per_day": "2 por Día",
+    "rate_1_per_week": "Por Semana",
+    "rate_custom_days": "Cada N Días",
+    "amount_label": "Monto Pagado",
+    "amount_placeholder": "ej. 15000",
+    "month_30_days": "Mes (30 días)",
+    "month_31_days": "Mes (31 días)",
+    "month_avg_weeks": "Mes Promedio (4.33 sem)",
+    "homologation_hint": "Un mes calendario promedio tiene ~4.33 semanas (30.4 días)."
   },
   "products": {
     "title": "Productos",
@@ -213,6 +220,17 @@
     "real_vs_plan": "Precio Real vs Estimado",
     "delete_confirm": "¿Estás seguro de eliminar este ítem del plan?",
     "record_as_purchase": "Registrar como Compra Real",
-    "notes": "Notas del Plan"
+    "notes": "Notas del Plan",
+    "calc_mode": "Modo de Carga",
+    "mode_frequency": "Por Frecuencia (Semanal / Diario)",
+    "mode_standard": "Precio Unitario × Cantidad",
+    "freq_label": "Frecuencia de Pago",
+    "freq_daily": "Diario (cada día)",
+    "freq_weekly": "Semanal (1 vez por semana)",
+    "freq_biweekly": "Quincenal (cada 15 días)",
+    "freq_monthly": "Mensual",
+    "homologate_btn": "Calculadora Rápida",
+    "homologated_projection": "Proyección Mensual (30 - 31 días)",
+    "quick_calculator_title": "Homologador de Gastos"
   }
 }
