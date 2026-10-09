@@ -224,7 +224,7 @@ export async function updateProduct(id: number, data: {
   name: string;
   category?: string;
   unit?: string;
-  notes?: string;
+  notes?: string | null;
   image_uri?: string | null;
 }): Promise<void> {
   const db = await getDatabase();
