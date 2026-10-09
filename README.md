@@ -75,8 +75,8 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/ismael6499/PriceBook.git
-   cd PriceBook
+   git clone https://github.com/ismael6499/pricebook.git
+   cd pricebook
    ```
 
 2. **Install dependencies:**
