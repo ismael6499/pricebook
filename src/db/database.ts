@@ -1005,3 +1005,64 @@ export async function deleteMonthlyPlanItem(id: number): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('DELETE FROM monthly_plan_items WHERE id = ?', id);
 }
+
+export async function generatePurchasesFromMonthlyPlan(options?: {
+  buyer?: string;
+  store?: string;
+  purchaseDate?: string;
+}): Promise<{ count: number; total: number }> {
+  const db = await getDatabase();
+  await ensureSchemaMigrations(db);
+
+  const planItems = await db.getAllAsync<MonthlyPlanItem>('SELECT * FROM monthly_plan_items ORDER BY id ASC');
+  if (!planItems || planItems.length === 0) {
+    return { count: 0, total: 0 };
+  }
+
+  const existingProducts = await db.getAllAsync<{ id: number; name: string }>('SELECT id, name FROM products');
+  const prodMap = new Map<string, number>();
+  existingProducts.forEach((p) => {
+    prodMap.set(p.name.toLowerCase().trim(), p.id);
+  });
+
+  const now = new Date();
+  const dateStr = options?.purchaseDate || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+  let count = 0;
+  let total = 0;
+
+  for (const item of planItems) {
+    let productId = prodMap.get(item.name.toLowerCase().trim());
+    if (!productId) {
+      const res = await db.runAsync(
+        'INSERT INTO products (name, category, unit, notes) VALUES (?, ?, ?, ?)',
+        item.name.trim(),
+        item.category || 'General',
+        item.unit_desc || '1 u',
+        item.notes || null
+      );
+      productId = res.lastInsertRowId;
+      prodMap.set(item.name.toLowerCase().trim(), productId);
+    }
+
+    const qty = item.estimated_monthly_qty > 0 ? item.estimated_monthly_qty : 1;
+    const itemTotal = Number((item.estimated_unit_price * qty).toFixed(2));
+
+    await createPurchase({
+      product_id: productId,
+      unit_price: item.estimated_unit_price,
+      quantity: qty,
+      purchase_date: dateStr,
+      store: options?.store || 'Monthly Plan',
+      buyer: options?.buyer || 'Parents',
+      status: 'pending',
+      entry_type: 'purchase',
+      notes: item.notes ? `Plan: ${item.notes}` : 'Generated from Monthly Plan',
+    });
+
+    count++;
+    total += itemTotal;
+  }
+
+  return { count, total: Number(total.toFixed(2)) };
+}

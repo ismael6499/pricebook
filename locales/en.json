@@ -255,6 +255,13 @@
     "custom_days_label": "Days per interval:",
     "homologate_btn": "Quick Calculator",
     "homologated_projection": "Monthly Projection (30 - 31 days)",
-    "quick_calculator_title": "Spending Homologator"
+    "quick_calculator_title": "Spending Homologator",
+    "generate_purchases_btn": "Generate Month Purchases",
+    "generate_confirm_title": "Generate Purchases from Plan",
+    "generate_confirm_desc": "This will record {{count}} items from your monthly plan as real pending purchases for a total of {{total}}. Do you want to proceed?",
+    "generate_confirm_action": "Generate Purchases",
+    "generate_success": "Successfully generated {{count}} purchases totaling {{total}}!",
+    "generate_empty_warning": "There are no items in your monthly plan to generate.",
+    "view_purchases_btn": "View Purchases"
   }
 }

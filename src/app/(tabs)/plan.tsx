@@ -22,6 +22,7 @@ import {
   createProduct,
   createPurchase,
   syncPlanPricesToProducts,
+  generatePurchasesFromMonthlyPlan,
   MonthlyPlanItem,
 } from '../../db/database';
 import { colors } from '../../constants/theme';
@@ -31,6 +32,7 @@ export default function MonthlyPlanScreen() {
   const router = useRouter();
   const [items, setItems] = useState<MonthlyPlanItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [quickCalcModalVisible, setQuickCalcModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<MonthlyPlanItem | null>(null);
@@ -344,6 +346,53 @@ export default function MonthlyPlanScreen() {
     }
   };
 
+  const handleGeneratePurchases = useCallback(() => {
+    if (items.length === 0) {
+      Alert.alert(t('common.info'), t('plan.generate_empty_warning'));
+      return;
+    }
+
+    Alert.alert(
+      t('plan.generate_confirm_title'),
+      t('plan.generate_confirm_desc', {
+        count: items.length,
+        total: formatCurrency(totalBudget),
+      }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('plan.generate_confirm_action'),
+          onPress: async () => {
+            try {
+              setIsGenerating(true);
+              const result = await generatePurchasesFromMonthlyPlan();
+              await loadData();
+              Alert.alert(
+                t('common.success'),
+                t('plan.generate_success', {
+                  count: result.count,
+                  total: formatCurrency(result.total),
+                }),
+                [
+                  { text: t('common.done') },
+                  {
+                    text: t('plan.view_purchases_btn'),
+                    onPress: () => router.push('/(tabs)/purchases'),
+                  },
+                ]
+              );
+            } catch (err) {
+              console.error('Error generating purchases from monthly plan:', err);
+              Alert.alert(t('common.error'), String(err));
+            } finally {
+              setIsGenerating(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [items, totalBudget, loadData, router]);
+
   const renderItem = ({ item }: { item: MonthlyPlanItem }) => {
     const hasRealPrice = item.current_real_price !== undefined;
     const isHigher = (item.variation_vs_estimate || 0) > 0;
@@ -449,14 +498,30 @@ export default function MonthlyPlanScreen() {
         }
       />
 
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        activeOpacity={0.8}
-        onPress={handleOpenAddModal}
-      >
-        <Ionicons name="add" size={28} color="#FFFFFF" />
-      </TouchableOpacity>
+      {/* Floating Action Buttons */}
+      <View style={styles.fabContainer} pointerEvents="box-none">
+        {items.length > 0 && (
+          <TouchableOpacity
+            style={styles.generateFab}
+            activeOpacity={0.8}
+            disabled={isGenerating}
+            onPress={handleGeneratePurchases}
+          >
+            <Ionicons name="cart" size={18} color="#FFFFFF" />
+            <Text style={styles.generateFabText}>
+              {t('plan.generate_purchases_btn')}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.8}
+          onPress={handleOpenAddModal}
+        >
+          <Ionicons name="add" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
 
       {/* Add / Edit Planned Item Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
@@ -1152,10 +1217,36 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
   },
-  fab: {
+  fabContainer: {
     position: 'absolute',
     bottom: 20,
-    right: 20,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  generateFab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#059669',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderRadius: 28,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    gap: 8,
+  },
+  generateFabText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  fab: {
+    marginLeft: 'auto',
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -1163,6 +1254,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
   },
   modalOverlay: {
     flex: 1,

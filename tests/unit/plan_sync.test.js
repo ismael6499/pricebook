@@ -120,6 +120,66 @@ function runPlanSyncTests() {
       debtWithPurchase === 10800.0,
       'Real purchase correctly adds $10.800 to pending debt'
     );
+
+    // Test generatePurchasesFromMonthlyPlan simulation
+    const initialPurchasesCount = state.purchases.length;
+    let generatedCount = 0;
+    let generatedTotal = 0;
+
+    state.monthly_plan_items.forEach((item) => {
+      let prod = state.products.find(
+        (p) => p.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+      );
+      if (!prod) {
+        prod = {
+          id: state.products.length + 1,
+          name: item.name,
+          category: 'General',
+          unit: '1 u',
+        };
+        state.products.push(prod);
+      }
+
+      const qty = item.estimated_monthly_qty > 0 ? item.estimated_monthly_qty : 1;
+      const totalAmount = Number((item.estimated_unit_price * qty).toFixed(2));
+
+      state.purchases.push({
+        id: state.purchases.length + 1,
+        product_id: prod.id,
+        unit_price: item.estimated_unit_price,
+        quantity: qty,
+        total_amount: totalAmount,
+        status: 'pending',
+        entry_type: 'purchase',
+        store: 'Monthly Plan',
+        buyer: 'Parents',
+        purchase_date: '2026-10-09 18:45:00',
+        notes: 'Generated from Monthly Plan',
+      });
+
+      generatedCount++;
+      generatedTotal += totalAmount;
+    });
+
+    assert(
+      generatedCount === state.monthly_plan_items.length,
+      `Generated purchases count (${generatedCount}) matches monthly plan items count (${state.monthly_plan_items.length})`
+    );
+
+    const expectedPlanBudget = (5000.0 * 31) + (7500.0 * 8) + (17500.0 * 4); // 155000 + 60000 + 70000 = 285000
+    assert(
+      generatedTotal === expectedPlanBudget,
+      `Generated purchases total ($${generatedTotal}) matches expected plan budget ($${expectedPlanBudget})`
+    );
+
+    const totalPendingDebtAfterPlan = state.purchases
+      .filter((p) => p.status === 'pending')
+      .reduce((sum, p) => sum + p.total_amount, 0);
+
+    assert(
+      totalPendingDebtAfterPlan === 10800.0 + expectedPlanBudget,
+      `Total pending debt reflects real purchase ($10.800) + generated monthly plan ($${expectedPlanBudget}) = $${10800.0 + expectedPlanBudget}`
+    );
   });
 }
 

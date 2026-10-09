@@ -255,6 +255,13 @@
     "custom_days_label": "Días por intervalo:",
     "homologate_btn": "Calculadora Rápida",
     "homologated_projection": "Proyección Mensual (30 - 31 días)",
-    "quick_calculator_title": "Homologador de Gastos"
+    "quick_calculator_title": "Homologador de Gastos",
+    "generate_purchases_btn": "Generar Compras del Mes",
+    "generate_confirm_title": "Generar Compras desde el Plan",
+    "generate_confirm_desc": "¿Querés registrar los {{count}} ítems del plan mensual como compras reales pendientes por un total de {{total}}?",
+    "generate_confirm_action": "Generar Compras",
+    "generate_success": "¡Se generaron con éxito {{count}} compras por un total de {{total}}!",
+    "generate_empty_warning": "No hay ítems en el plan mensual para generar.",
+    "view_purchases_btn": "Ver Compras"
   }
 }
