@@ -1,20 +1,22 @@
-import { Paths, Directory, File } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { exportDatabaseToJson, restoreDatabaseFromJson } from '../db/database';
 
 const MAX_BACKUP_DAYS = 7;
 
-function getBackupDirectory(): Directory {
-  return new Directory(Paths.document, 'backups');
+function getBackupDirPath(): string {
+  const docDir = FileSystem.documentDirectory || '';
+  return `${docDir}backups/`;
 }
 
-export async function ensureBackupDir(): Promise<Directory> {
-  const dir = getBackupDirectory();
-  if (!dir.exists) {
-    dir.create({ idempotent: true });
+export async function ensureBackupDir(): Promise<string> {
+  const dirPath = getBackupDirPath();
+  const info = await FileSystem.getInfoAsync(dirPath);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
   }
-  return dir;
+  return dirPath;
 }
 
 /**
@@ -22,43 +24,37 @@ export async function ensureBackupDir(): Promise<Directory> {
  * and purges backups older than 7 days.
  */
 export async function performDailyAutoBackup(): Promise<string> {
-  const dir = await ensureBackupDir();
+  const dirPath = await ensureBackupDir();
 
   const todayStr = new Date().toISOString().substring(0, 10);
   const backupFileName = `pricebook_backup_${todayStr}.json`;
-  const backupFile = new File(dir, backupFileName);
+  const backupFilePath = `${dirPath}${backupFileName}`;
 
   const backupData = await exportDatabaseToJson();
-  backupFile.write(JSON.stringify(backupData, null, 2));
+  await FileSystem.writeAsStringAsync(backupFilePath, JSON.stringify(backupData, null, 2));
 
   // Rotate backups: keep only last 7 days
   await rotateOldBackups();
 
-  return backupFile.uri;
+  return backupFilePath;
 }
 
 export async function rotateOldBackups(): Promise<void> {
   try {
-    const dir = await ensureBackupDir();
-    const items = dir.list();
-    const backupFiles: File[] = [];
-
-    for (const item of items) {
-      if (item instanceof File && item.name.startsWith('pricebook_backup_') && item.name.endsWith('.json')) {
-        backupFiles.push(item);
-      }
-    }
-
-    // Sort descending by name (newest first)
-    backupFiles.sort((a, b) => b.name.localeCompare(a.name));
+    const dirPath = await ensureBackupDir();
+    const files = await FileSystem.readDirectoryAsync(dirPath);
+    const backupFiles = files
+      .filter((f) => f.startsWith('pricebook_backup_') && f.endsWith('.json'))
+      .sort()
+      .reverse(); // Newest first
 
     if (backupFiles.length > MAX_BACKUP_DAYS) {
       const filesToDelete = backupFiles.slice(MAX_BACKUP_DAYS);
       for (const f of filesToDelete) {
         try {
-          f.delete();
+          await FileSystem.deleteAsync(`${dirPath}${f}`, { idempotent: true });
         } catch (e) {
-          console.warn('Failed to delete old backup file:', f.name, e);
+          console.warn('Failed to delete old backup file:', f, e);
         }
       }
     }
@@ -68,23 +64,29 @@ export async function rotateOldBackups(): Promise<void> {
 }
 
 export async function listLocalBackups(): Promise<Array<{ name: string; uri: string; size: number }>> {
-  const dir = await ensureBackupDir();
-  const items = dir.list();
-  const backupFiles: File[] = [];
+  try {
+    const dirPath = await ensureBackupDir();
+    const files = await FileSystem.readDirectoryAsync(dirPath);
+    const backupFiles = files
+      .filter((f) => f.startsWith('pricebook_backup_') && f.endsWith('.json'))
+      .sort()
+      .reverse();
 
-  for (const item of items) {
-    if (item instanceof File && item.name.startsWith('pricebook_backup_') && item.name.endsWith('.json')) {
-      backupFiles.push(item);
+    const results = [];
+    for (const name of backupFiles) {
+      const uri = `${dirPath}${name}`;
+      const info = await FileSystem.getInfoAsync(uri);
+      results.push({
+        name,
+        uri,
+        size: (info as any).size || 0,
+      });
     }
+    return results;
+  } catch (err) {
+    console.warn('Could not list local backups:', err);
+    return [];
   }
-
-  backupFiles.sort((a, b) => b.name.localeCompare(a.name));
-
-  return backupFiles.map((f) => ({
-    name: f.name,
-    uri: f.uri,
-    size: f.size || 0,
-  }));
 }
 
 /**
@@ -121,8 +123,7 @@ export async function pickAndRestoreBackup(): Promise<{ success: boolean; messag
   }
 
   const asset = result.assets[0];
-  const file = new File(asset.uri);
-  const content = await file.text();
+  const content = await FileSystem.readAsStringAsync(asset.uri);
   const backupJson = JSON.parse(content);
 
   await restoreDatabaseFromJson(backupJson);

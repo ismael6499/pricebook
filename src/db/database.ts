@@ -1,18 +1,49 @@
 import * as SQLite from 'expo-sqlite';
-import { INITIAL_SCHEMA, DB_NAME } from './schema';
+import { INITIAL_SCHEMA, AGUSTIN_SEED_SQL, DB_NAME } from './schema';
 
-let dbInstance: SQLite.SQLiteDatabase | null = null;
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let isInitialized = false;
 
 export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (!dbInstance) {
-    dbInstance = await SQLite.openDatabaseAsync(DB_NAME);
-    await initDatabase(dbInstance);
+  if (!dbPromise) {
+    dbPromise = (async () => {
+      const db = await SQLite.openDatabaseAsync(DB_NAME);
+      if (!isInitialized) {
+        await initDatabase(db);
+      }
+      return db;
+    })();
   }
-  return dbInstance;
+  return dbPromise;
 }
 
 export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
-  await db.execAsync(INITIAL_SCHEMA);
+  if (isInitialized) return;
+  try {
+    await db.execAsync(INITIAL_SCHEMA);
+  } catch (err) {
+    console.warn('Database initialization warning:', err);
+  }
+  isInitialized = true;
+}
+
+/**
+ * Loads Agustín's personal template ($850.000 September settlement + 11 habitual items).
+ * Kept separate so public releases can remain empty and customized per device.
+ */
+export async function seedAgustinPersonalData(): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(AGUSTIN_SEED_SQL);
+}
+
+export async function clearPersonalData(): Promise<void> {
+  const db = await getDatabase();
+  await db.execAsync(`
+    DELETE FROM purchases;
+    DELETE FROM settlements;
+    DELETE FROM products;
+    DELETE FROM monthly_plan_items;
+  `);
 }
 
 // -------------------------------------------------------------------------
@@ -59,6 +90,7 @@ export interface Purchase {
   buyer: string | null;
   status: 'pending' | 'settled';
   settlement_id: number | null;
+  entry_type?: 'purchase' | 'reference';
   notes: string | null;
   created_at: string;
   // Computed fields
@@ -116,6 +148,17 @@ export async function getCategories(): Promise<Category[]> {
   return db.getAllAsync<Category>('SELECT * FROM categories ORDER BY name ASC');
 }
 
+export async function getCategoriesWithCount(): Promise<Array<Category & { product_count: number }>> {
+  const db = await getDatabase();
+  return db.getAllAsync<Category & { product_count: number }>(`
+    SELECT c.*, COUNT(p.id) as product_count
+    FROM categories c
+    LEFT JOIN products p ON p.category = c.name
+    GROUP BY c.id
+    ORDER BY c.name ASC
+  `);
+}
+
 export async function createCategory(name: string, color: string = '#3B82F6', icon: string = 'pricetag'): Promise<number> {
   const db = await getDatabase();
   const res = await db.runAsync(
@@ -127,9 +170,39 @@ export async function createCategory(name: string, color: string = '#3B82F6', ic
   return res.lastInsertRowId;
 }
 
+export async function updateCategory(
+  id: number,
+  data: { name: string; color?: string; icon?: string }
+): Promise<void> {
+  const db = await getDatabase();
+  const oldCategory = await db.getFirstAsync<Category>('SELECT * FROM categories WHERE id = ?', id);
+  if (!oldCategory) return;
+  const newName = data.name.trim();
+  const newColor = data.color || oldCategory.color;
+  const newIcon = data.icon || oldCategory.icon;
+
+  await db.runAsync(
+    'UPDATE categories SET name = ?, color = ?, icon = ? WHERE id = ?',
+    newName,
+    newColor,
+    newIcon,
+    id
+  );
+
+  // If name changed, migrate products that had old category name
+  if (oldCategory.name !== newName) {
+    await db.runAsync('UPDATE products SET category = ? WHERE category = ?', newName, oldCategory.name);
+  }
+}
+
 export async function deleteCategory(id: number): Promise<void> {
   const db = await getDatabase();
-  await db.runAsync('DELETE FROM categories WHERE id = ? AND is_default = 0', id);
+  const category = await db.getFirstAsync<Category>('SELECT * FROM categories WHERE id = ?', id);
+  if (!category || category.is_default === 1) return;
+
+  // Safely reassign associated products to 'General' before deleting
+  await db.runAsync("UPDATE products SET category = 'General' WHERE category = ?", category.name);
+  await db.runAsync('DELETE FROM categories WHERE id = ?', id);
 }
 
 // -------------------------------------------------------------------------
@@ -254,6 +327,9 @@ export async function getPurchases(options?: {
   productId?: number;
   status?: 'pending' | 'settled' | 'all';
   monthPeriod?: string; // YYYY-MM
+  timeRange?: 'day' | 'week' | 'month' | 'custom' | 'all';
+  customDays?: number;
+  entryType?: 'purchase' | 'reference' | 'all';
   limit?: number;
 }): Promise<Purchase[]> {
   const db = await getDatabase();
@@ -275,9 +351,34 @@ export async function getPurchases(options?: {
     params.push(options.status);
   }
 
+  if (options?.entryType && options.entryType !== 'all') {
+    sql += ' AND pu.entry_type = ?';
+    params.push(options.entryType);
+  }
+
   if (options?.monthPeriod) {
     sql += ' AND pu.purchase_date LIKE ?';
     params.push(`${options.monthPeriod}%`);
+  } else if (options?.timeRange && options.timeRange !== 'all') {
+    const now = new Date();
+    if (options.timeRange === 'day') {
+      const todayStr = now.toISOString().substring(0, 10);
+      sql += ' AND pu.purchase_date >= ?';
+      params.push(`${todayStr} 00:00:00`);
+    } else if (options.timeRange === 'week') {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      sql += ' AND pu.purchase_date >= ?';
+      params.push(sevenDaysAgo.toISOString().replace('T', ' ').substring(0, 19));
+    } else if (options.timeRange === 'month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      sql += ' AND pu.purchase_date >= ?';
+      params.push(startOfMonth.toISOString().replace('T', ' ').substring(0, 19));
+    } else if (options.timeRange === 'custom') {
+      const days = options.customDays && options.customDays > 0 ? options.customDays : 30;
+      const customPast = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      sql += ' AND pu.purchase_date >= ?';
+      params.push(customPast.toISOString().replace('T', ' ').substring(0, 19));
+    }
   }
 
   sql += ' ORDER BY pu.purchase_date DESC, pu.id DESC';
@@ -288,6 +389,71 @@ export async function getPurchases(options?: {
   }
 
   return db.getAllAsync<Purchase>(sql, ...params);
+}
+
+export interface SpendingStats {
+  totalSpent: number;
+  totalOwedPending: number;
+  purchasesCount: number;
+  referenceCount: number;
+  daysCount: number;
+  avgPerDay: number;
+  avgPerWeek: number;
+  avgPerMonth: number;
+}
+
+export function computeSpendingStats(
+  purchases: Purchase[],
+  timeRange: 'day' | 'week' | 'month' | 'custom' | 'all' = 'all',
+  customDays: number = 30
+): SpendingStats {
+  let totalSpent = 0;
+  let totalOwedPending = 0;
+  let purchasesCount = 0;
+  let referenceCount = 0;
+
+  purchases.forEach((p) => {
+    if (p.entry_type === 'reference') {
+      referenceCount++;
+    } else {
+      totalSpent += p.total_amount;
+      purchasesCount++;
+      if (p.status === 'pending') {
+        totalOwedPending += p.total_amount;
+      }
+    }
+  });
+
+  let days = 30;
+  if (timeRange === 'day') days = 1;
+  else if (timeRange === 'week') days = 7;
+  else if (timeRange === 'month') days = 30;
+  else if (timeRange === 'custom') days = Math.max(1, customDays);
+  else {
+    if (purchases.length > 1) {
+      const earliest = new Date(purchases[purchases.length - 1].purchase_date).getTime();
+      const latest = new Date(purchases[0].purchase_date).getTime();
+      const diffDays = Math.ceil((latest - earliest) / (1000 * 60 * 60 * 24));
+      days = Math.max(1, diffDays);
+    } else {
+      days = 1;
+    }
+  }
+
+  const avgPerDay = totalSpent / days;
+  const avgPerWeek = avgPerDay * 7;
+  const avgPerMonth = avgPerDay * 30;
+
+  return {
+    totalSpent: Number(totalSpent.toFixed(2)),
+    totalOwedPending: Number(totalOwedPending.toFixed(2)),
+    purchasesCount,
+    referenceCount,
+    daysCount: days,
+    avgPerDay: Number(avgPerDay.toFixed(2)),
+    avgPerWeek: Number(avgPerWeek.toFixed(2)),
+    avgPerMonth: Number(avgPerMonth.toFixed(2)),
+  };
 }
 
 export async function createPurchase(data: {
@@ -301,15 +467,18 @@ export async function createPurchase(data: {
   status?: 'pending' | 'settled';
   currency?: string;
   usd_rate?: number | null;
+  entry_type?: 'purchase' | 'reference';
 }): Promise<number> {
   const db = await getDatabase();
+  const entryType = data.entry_type || 'purchase';
   const qty = data.quantity && data.quantity > 0 ? data.quantity : 1;
-  const total = Number((data.unit_price * qty).toFixed(2));
+  // For price check reference, total_amount is 0 so it never adds to debt!
+  const total = entryType === 'reference' ? 0 : Number((data.unit_price * qty).toFixed(2));
   const dateStr = data.purchase_date || new Date().toISOString().replace('T', ' ').substring(0, 19);
 
   const res = await db.runAsync(
-    `INSERT INTO purchases (product_id, unit_price, quantity, total_amount, currency, usd_rate, purchase_date, store, buyer, status, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO purchases (product_id, unit_price, quantity, total_amount, currency, usd_rate, purchase_date, store, buyer, status, settlement_id, entry_type, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
     data.product_id,
     data.unit_price,
     qty,
@@ -319,7 +488,8 @@ export async function createPurchase(data: {
     dateStr,
     data.store?.trim() || null,
     data.buyer?.trim() || 'Parents',
-    data.status || 'pending',
+    entryType === 'reference' ? 'settled' : (data.status || 'pending'),
+    entryType,
     data.notes?.trim() || null
   );
 
@@ -367,19 +537,22 @@ export async function getMonthlySummary(monthPeriod?: string): Promise<MonthlySu
   let settledCount = 0;
 
   currentPurchases.forEach((p) => {
-    totalSpent += p.total_amount;
-    if (p.status === 'pending') {
-      totalPending += p.total_amount;
-      pendingCount++;
-    } else {
-      totalSettled += p.total_amount;
-      settledCount++;
+    // Only count real purchases, ignore price reference checks
+    if (p.entry_type !== 'reference') {
+      totalSpent += p.total_amount;
+      if (p.status === 'pending') {
+        totalPending += p.total_amount;
+        pendingCount++;
+      } else {
+        totalSettled += p.total_amount;
+        settledCount++;
+      }
     }
   });
 
   // Previous month total spent
   const prevResult = await db.getFirstAsync<{ prev_total: number | null }>(
-    `SELECT SUM(total_amount) as prev_total FROM purchases WHERE purchase_date LIKE ?`,
+    `SELECT SUM(total_amount) as prev_total FROM purchases WHERE purchase_date LIKE ? AND entry_type != 'reference'`,
     `${prevPeriod}%`
   );
   const previousMonthTotal = prevResult?.prev_total || 0;

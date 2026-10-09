@@ -14,7 +14,6 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polyline, Circle, Line, Text as SvgText } from 'react-native-svg';
-import * as ImagePicker from 'expo-image-picker';
 import {
   getProductById,
   getPurchases,
@@ -27,6 +26,8 @@ import {
   Purchase,
 } from '../../db/database';
 import { fetchUsdBlueRate } from '../../services/dollar';
+import PhotoPickerModal from '../../components/PhotoPickerModal';
+import UnitCalculatorCard from '../../components/UnitCalculatorCard';
 import { colors } from '../../constants/theme';
 import { t, formatCurrency, formatPercent, formatDateTime } from '../../i18n';
 
@@ -40,8 +41,10 @@ export default function ProductDetailScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [purchaseModalVisible, setPurchaseModalVisible] = useState(false);
+  const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
 
   // New purchase form
+  const [entryType, setEntryType] = useState<'purchase' | 'reference'>('purchase');
   const [unitPrice, setUnitPrice] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [store, setStore] = useState('');
@@ -67,42 +70,20 @@ export default function ProductDetailScreen() {
     fetchUsdBlueRate().then((rate) => setUsdRate(rate));
   }, [loadData]);
 
-  const handleChangePhoto = async () => {
-    Alert.alert('Product Photo', 'Choose an option', [
-      {
-        text: 'Camera',
-        onPress: async () => {
-          const res = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-          if (!res.canceled && res.assets[0] && product) {
-            await updateProduct(product.id, {
-              name: product.name,
-              category: product.category,
-              unit: product.unit,
-              notes: product.notes,
-              image_uri: res.assets[0].uri,
-            });
-            loadData();
-          }
-        },
-      },
-      {
-        text: 'Gallery',
-        onPress: async () => {
-          const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
-          if (!res.canceled && res.assets[0] && product) {
-            await updateProduct(product.id, {
-              name: product.name,
-              category: product.category,
-              unit: product.unit,
-              notes: product.notes,
-              image_uri: res.assets[0].uri,
-            });
-            loadData();
-          }
-        },
-      },
-      { text: t('common.cancel'), style: 'cancel' },
-    ]);
+  const handlePhotoSelected = async (uri: string | null) => {
+    if (!product) return;
+    try {
+      await updateProduct(product.id, {
+        name: product.name,
+        category: product.category,
+        unit: product.unit,
+        notes: product.notes,
+        image_uri: uri,
+      });
+      loadData();
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err?.message || 'Failed to update photo');
+    }
   };
 
   const handleAddPurchase = async () => {
@@ -121,7 +102,8 @@ export default function ProductDetailScreen() {
         store: store.trim() || undefined,
         buyer: buyer.trim() || 'Parents',
         notes: notes.trim() || undefined,
-        status,
+        status: entryType === 'reference' ? 'settled' : status,
+        entry_type: entryType,
         usd_rate: usdRate,
       });
 
@@ -129,11 +111,12 @@ export default function ProductDetailScreen() {
       setQuantity('1');
       setStore('');
       setNotes('');
+      setEntryType('purchase');
       setStatus('pending');
       setPurchaseModalVisible(false);
       loadData();
     } catch (err) {
-      Alert.alert(t('common.error'), 'Failed to save purchase');
+      Alert.alert(t('common.error'), 'Failed to save record');
     }
   };
 
@@ -268,7 +251,7 @@ export default function ProductDetailScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Hero Header */}
       <View style={styles.heroCard}>
-        <TouchableOpacity style={styles.photoContainer} onPress={handleChangePhoto}>
+        <TouchableOpacity style={styles.photoContainer} onPress={() => setPhotoPickerVisible(true)}>
           {product.image_uri ? (
             <Image source={{ uri: product.image_uri }} style={styles.heroImage} />
           ) : (
@@ -344,7 +327,10 @@ export default function ProductDetailScreen() {
         {renderChart()}
       </View>
 
-      {/* Action Button: Record New Purchase */}
+      {/* Unit & Frequency Breakdown Calculator */}
+      <UnitCalculatorCard unitPrice={product.latest_price || 0} />
+
+      {/* Action Button: Record New Purchase / Price Check */}
       <TouchableOpacity
         style={styles.recordBtn}
         activeOpacity={0.8}
@@ -364,27 +350,34 @@ export default function ProductDetailScreen() {
             <View key={pur.id} style={styles.historyItem}>
               <View style={styles.historyTopRow}>
                 <Text style={styles.historyDate}>{formatDateTime(pur.purchase_date)}</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.statusPill,
-                    pur.status === 'pending' ? styles.statusPending : styles.statusSettled,
-                  ]}
-                  onPress={() => handleToggleStatus(pur)}
-                >
-                  <Ionicons
-                    name={pur.status === 'pending' ? 'time-outline' : 'checkmark-circle-outline'}
-                    size={12}
-                    color={pur.status === 'pending' ? colors.warning : colors.success}
-                  />
-                  <Text
+                {pur.entry_type === 'reference' ? (
+                  <View style={styles.refBadge}>
+                    <Ionicons name="pricetag" size={12} color={colors.primary} />
+                    <Text style={styles.refBadgeText}>{t('purchases.reference_badge')}</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
                     style={[
-                      styles.statusPillText,
-                      pur.status === 'pending' ? { color: colors.warning } : { color: colors.success },
+                      styles.statusPill,
+                      pur.status === 'pending' ? styles.statusPending : styles.statusSettled,
                     ]}
+                    onPress={() => handleToggleStatus(pur)}
                   >
-                    {pur.status === 'pending' ? t('settlement.pending_badge') : t('settlement.settled_badge')}
-                  </Text>
-                </TouchableOpacity>
+                    <Ionicons
+                      name={pur.status === 'pending' ? 'time-outline' : 'checkmark-circle-outline'}
+                      size={12}
+                      color={pur.status === 'pending' ? colors.warning : colors.success}
+                    />
+                    <Text
+                      style={[
+                        styles.statusPillText,
+                        pur.status === 'pending' ? { color: colors.warning } : { color: colors.success },
+                      ]}
+                    >
+                      {pur.status === 'pending' ? t('settlement.pending_badge') : t('settlement.settled_badge')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={styles.historyDetailRow}>
@@ -424,6 +417,51 @@ export default function ProductDetailScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>{t('purchases.entry_type')}</Text>
+              <View style={styles.entryTypeToggleRow}>
+                <TouchableOpacity
+                  style={[styles.entryTypeBtn, entryType === 'purchase' && styles.entryTypeBtnActive]}
+                  onPress={() => setEntryType('purchase')}
+                >
+                  <Ionicons
+                    name="cart"
+                    size={16}
+                    color={entryType === 'purchase' ? '#FFFFFF' : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.entryTypeText,
+                      entryType === 'purchase' && styles.entryTypeTextActive,
+                    ]}
+                  >
+                    {t('purchases.type_purchase')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.entryTypeBtn, entryType === 'reference' && styles.entryTypeBtnActiveRef]}
+                  onPress={() => setEntryType('reference')}
+                >
+                  <Ionicons
+                    name="pricetag"
+                    size={16}
+                    color={entryType === 'reference' ? '#FFFFFF' : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.entryTypeText,
+                      entryType === 'reference' && styles.entryTypeTextActive,
+                    ]}
+                  >
+                    {t('purchases.type_reference')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {entryType === 'reference' ? (
+                <Text style={styles.hintText}>{t('purchases.type_reference_hint')}</Text>
+              ) : null}
+
               <Text style={styles.inputLabel}>{t('purchases.unit_price')} ($)</Text>
               <TextInput
                 style={styles.modalInput}
@@ -462,35 +500,39 @@ export default function ProductDetailScreen() {
                 onChangeText={setBuyer}
               />
 
-              <Text style={styles.inputLabel}>{t('purchases.status')}</Text>
-              <View style={styles.statusToggleRow}>
-                <TouchableOpacity
-                  style={[styles.statusToggleBtn, status === 'pending' && styles.statusToggleActivePending]}
-                  onPress={() => setStatus('pending')}
-                >
-                  <Text
-                    style={[
-                      styles.statusToggleText,
-                      status === 'pending' && { color: colors.warning, fontWeight: '700' },
-                    ]}
-                  >
-                    {t('purchases.status_pending')}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.statusToggleBtn, status === 'settled' && styles.statusToggleActiveSettled]}
-                  onPress={() => setStatus('settled')}
-                >
-                  <Text
-                    style={[
-                      styles.statusToggleText,
-                      status === 'settled' && { color: colors.success, fontWeight: '700' },
-                    ]}
-                  >
-                    {t('purchases.status_settled')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              {entryType === 'purchase' && (
+                <>
+                  <Text style={styles.inputLabel}>{t('purchases.status')}</Text>
+                  <View style={styles.statusToggleRow}>
+                    <TouchableOpacity
+                      style={[styles.statusToggleBtn, status === 'pending' && styles.statusToggleActivePending]}
+                      onPress={() => setStatus('pending')}
+                    >
+                      <Text
+                        style={[
+                          styles.statusToggleText,
+                          status === 'pending' && { color: colors.warning, fontWeight: '700' },
+                        ]}
+                      >
+                        {t('purchases.status_pending')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.statusToggleBtn, status === 'settled' && styles.statusToggleActiveSettled]}
+                      onPress={() => setStatus('settled')}
+                    >
+                      <Text
+                        style={[
+                          styles.statusToggleText,
+                          status === 'settled' && { color: colors.success, fontWeight: '700' },
+                        ]}
+                      >
+                        {t('purchases.status_settled')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
 
               <TouchableOpacity style={styles.saveBtn} onPress={handleAddPurchase}>
                 <Text style={styles.saveBtnText}>{t('common.save')}</Text>
@@ -499,6 +541,14 @@ export default function ProductDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Photo Picker Modal */}
+      <PhotoPickerModal
+        visible={photoPickerVisible}
+        onClose={() => setPhotoPickerVisible(false)}
+        onImageSelected={handlePhotoSelected}
+        hasExistingImage={Boolean(product.image_uri)}
+      />
     </ScrollView>
   );
 }
@@ -830,5 +880,59 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  refBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  refBadgeText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  entryTypeToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 8,
+  },
+  entryTypeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceElevated,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  entryTypeBtnActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  entryTypeBtnActiveRef: {
+    backgroundColor: '#0D9488', // Teal
+    borderColor: '#0D9488',
+  },
+  entryTypeText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  entryTypeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  hintText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    marginBottom: 4,
   },
 });

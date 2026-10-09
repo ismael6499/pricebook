@@ -13,15 +13,15 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import {
   getAllProducts,
   getCategories,
-  createCategory,
   createProduct,
   Product,
   Category,
 } from '../../db/database';
+import CategoryManagerModal from '../../components/CategoryManagerModal';
+import PhotoPickerModal from '../../components/PhotoPickerModal';
 import { colors } from '../../constants/theme';
 import { t, formatCurrency, formatPercent } from '../../i18n';
 
@@ -33,6 +33,7 @@ export default function ProductsScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [modalVisible, setModalVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
 
   // New product form
   const [name, setName] = useState('');
@@ -40,9 +41,6 @@ export default function ProductsScreen() {
   const [unit, setUnit] = useState('1 u');
   const [notes, setNotes] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
-
-  // New category form
-  const [newCategoryName, setNewCategoryName] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -60,37 +58,6 @@ export default function ProductsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handlePickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(t('common.error'), 'Permission to access gallery is required');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
-    }
-  };
-
-  const handleTakePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(t('common.error'), 'Permission to access camera is required');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
-    }
-  };
 
   const handleCreateProduct = async () => {
     if (!name.trim()) {
@@ -115,19 +82,6 @@ export default function ProductsScreen() {
     } catch (err) {
       console.error('Failed to create product:', err);
       Alert.alert(t('common.error'), 'Failed to create product');
-    }
-  };
-
-  const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) return;
-    try {
-      await createCategory(newCategoryName.trim());
-      setNewCategoryName('');
-      setCategoryModalVisible(false);
-      const cats = await getCategories();
-      setCategories(cats);
-    } catch (err) {
-      Alert.alert(t('common.error'), 'Category already exists or invalid');
     }
   };
 
@@ -245,8 +199,8 @@ export default function ProductsScreen() {
             style={styles.addCategoryChip}
             onPress={() => setCategoryModalVisible(true)}
           >
-            <Ionicons name="add" size={14} color={colors.primary} />
-            <Text style={styles.addCategoryText}>Category</Text>
+            <Ionicons name="settings-outline" size={14} color={colors.primary} />
+            <Text style={styles.addCategoryText}>{t('categories.manage')}</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -299,16 +253,15 @@ export default function ProductsScreen() {
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <View style={styles.imageActionButtons}>
-                    <TouchableOpacity style={styles.imageBtn} onPress={handleTakePhoto}>
-                      <Ionicons name="camera" size={20} color={colors.primary} />
-                      <Text style={styles.imageBtnText}>{t('products.take_photo')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.imageBtn} onPress={handlePickImage}>
-                      <Ionicons name="images" size={20} color={colors.primary} />
-                      <Text style={styles.imageBtnText}>{t('products.pick_image')}</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.photoSelectPlaceholder}
+                    onPress={() => setPhotoPickerVisible(true)}
+                  >
+                    <Ionicons name="camera-outline" size={24} color={colors.primary} />
+                    <Text style={styles.photoSelectPlaceholderText}>
+                      {t('products.photo_source_title')}
+                    </Text>
+                  </TouchableOpacity>
                 )}
               </View>
 
@@ -368,35 +321,20 @@ export default function ProductsScreen() {
         </View>
       </Modal>
 
-      {/* Add Category Modal */}
-      <Modal visible={categoryModalVisible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: 220 }]}>
-            <Text style={styles.modalTitle}>New Category</Text>
-            <TextInput
-              style={[styles.modalInput, { marginTop: 16 }]}
-              placeholder="e.g. Snacks, Beverages, Pharmacy"
-              placeholderTextColor={colors.textMuted}
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-            />
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity
-                style={[styles.btnCancel, { flex: 1, marginRight: 8 }]}
-                onPress={() => setCategoryModalVisible(false)}
-              >
-                <Text style={styles.btnCancelText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, { flex: 1, marginTop: 0 }]}
-                onPress={handleCreateCategory}
-              >
-                <Text style={styles.saveBtnText}>{t('common.save')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Category Manager Modal */}
+      <CategoryManagerModal
+        visible={categoryModalVisible}
+        onClose={() => setCategoryModalVisible(false)}
+        onCategoryChange={loadData}
+      />
+
+      {/* Photo Picker Modal */}
+      <PhotoPickerModal
+        visible={photoPickerVisible}
+        onClose={() => setPhotoPickerVisible(false)}
+        onImageSelected={(uri) => setImageUri(uri)}
+        hasExistingImage={Boolean(imageUri)}
+      />
     </View>
   );
 }
@@ -734,6 +672,22 @@ const styles = StyleSheet.create({
   btnCancelText: {
     color: colors.textSecondary,
     fontSize: 15,
+    fontWeight: '600',
+  },
+  photoSelectPlaceholder: {
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceElevated,
+    gap: 6,
+  },
+  photoSelectPlaceholderText: {
+    color: colors.primary,
+    fontSize: 13,
     fontWeight: '600',
   },
 });

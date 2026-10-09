@@ -16,7 +16,8 @@ import {
   listLocalBackups,
 } from '../../services/backup';
 import { fetchUsdBlueRate } from '../../services/dollar';
-import { getSetting, setSetting } from '../../db/database';
+import { getSetting, setSetting, seedAgustinPersonalData, clearPersonalData } from '../../db/database';
+import CategoryManagerModal from '../../components/CategoryManagerModal';
 import { colors } from '../../constants/theme';
 import { t, setLocale, getLocale, SupportedLocale } from '../../i18n';
 
@@ -25,6 +26,8 @@ export default function SettingsScreen() {
   const [usdRate, setUsdRate] = useState<number>(1350);
   const [backups, setBackups] = useState<Array<{ name: string; uri: string; size: number }>>([]);
   const [autoUsd, setAutoUsd] = useState(true);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -103,8 +106,58 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleLoadPersonalBasket = () => {
+    Alert.alert(
+      t('settings.load_personal_basket'),
+      t('settings.load_personal_basket_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.confirm'),
+          onPress: async () => {
+            try {
+              setSeeding(true);
+              await seedAgustinPersonalData();
+              Alert.alert(t('common.success'), t('settings.load_personal_basket_success'));
+            } catch (err: any) {
+              Alert.alert(t('common.error'), err?.message || 'Failed to seed data');
+            } finally {
+              setSeeding(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleClearData = () => {
+    Alert.alert(
+      t('settings.clear_database_btn'),
+      t('settings.clean_database_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setSeeding(true);
+              await clearPersonalData();
+              Alert.alert(t('common.success'), t('settings.clear_database_success'));
+            } catch (err: any) {
+              Alert.alert(t('common.error'), err?.message || 'Failed to reset data');
+            } finally {
+              setSeeding(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Language Section */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
@@ -125,6 +178,56 @@ export default function SettingsScreen() {
             <Ionicons name="globe-outline" size={16} color={currentLang === 'es' ? '#FFFFFF' : colors.textSecondary} />
             <Text style={[styles.optionText, currentLang === 'es' && styles.optionTextActive]}>
               Español
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Categories Management */}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{t('settings.manage_categories')}</Text>
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={() => setCategoryModalVisible(true)}
+          >
+            <Ionicons name="pricetags-outline" size={16} color={colors.primary} />
+            <Text style={styles.refreshText}>{t('common.edit')}</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.sectionDesc}>{t('settings.manage_categories_desc')}</Text>
+        <TouchableOpacity
+          style={styles.categoryActionBtn}
+          onPress={() => setCategoryModalVisible(true)}
+        >
+          <Ionicons name="color-palette-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.categoryActionBtnText}>{t('categories.manage')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Agustín's Personal Habitual Basket & Clean DB */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionTitle}>{t('settings.personal_data_title')}</Text>
+        <Text style={styles.sectionDesc}>{t('settings.personal_data_desc')}</Text>
+
+        <View style={styles.backupActions}>
+          <TouchableOpacity
+            style={[styles.primaryActionBtn, { backgroundColor: '#10b981' }]}
+            onPress={handleLoadPersonalBasket}
+            disabled={seeding}
+          >
+            <Ionicons name="basket-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.primaryActionBtnText}>{t('settings.load_personal_basket')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.secondaryBtn, { borderColor: colors.danger, marginTop: 4 }]}
+            onPress={handleClearData}
+            disabled={seeding}
+          >
+            <Ionicons name="trash-bin-outline" size={16} color={colors.danger} />
+            <Text style={[styles.secondaryBtnText, { color: colors.danger }]}>
+              {t('settings.clear_database_btn')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -201,6 +304,12 @@ export default function SettingsScreen() {
         </Text>
       </View>
     </ScrollView>
+
+    <CategoryManagerModal
+      visible={categoryModalVisible}
+      onClose={() => setCategoryModalVisible(false)}
+    />
+  </>
   );
 }
 
@@ -208,6 +317,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  categoryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+    marginTop: 12,
+  },
+  categoryActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   content: {
     padding: 16,

@@ -17,6 +17,7 @@ import {
   createPurchase,
   togglePurchaseStatus,
   deletePurchase,
+  computeSpendingStats,
   Purchase,
   Product,
 } from '../../db/database';
@@ -28,10 +29,16 @@ export default function PurchasesScreen() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'settled'>('all');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'day' | 'week' | 'month' | 'custom'>('all');
+  const [customDays, setCustomDays] = useState<number>(15);
+  const [customDaysInput, setCustomDaysInput] = useState<string>('15');
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const [entryTypeFilter, setEntryTypeFilter] = useState<'all' | 'purchase' | 'reference'>('all');
   const [modalVisible, setModalVisible] = useState(false);
 
   // New purchase form
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [entryType, setEntryType] = useState<'purchase' | 'reference'>('purchase');
   const [unitPrice, setUnitPrice] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [store, setStore] = useState('');
@@ -43,7 +50,12 @@ export default function PurchasesScreen() {
   const loadData = useCallback(async () => {
     try {
       const [purs, prods] = await Promise.all([
-        getPurchases({ status: statusFilter }),
+        getPurchases({
+          status: statusFilter,
+          timeRange: timeFilter,
+          customDays,
+          entryType: entryTypeFilter,
+        }),
         getAllProducts(),
       ]);
       setPurchases(purs);
@@ -51,7 +63,7 @@ export default function PurchasesScreen() {
     } catch (err) {
       console.error('Error loading purchases:', err);
     }
-  }, [statusFilter]);
+  }, [statusFilter, timeFilter, customDays, entryTypeFilter]);
 
   useEffect(() => {
     loadData();
@@ -100,6 +112,7 @@ export default function PurchasesScreen() {
         notes: notes.trim() || undefined,
         status: purchaseStatus,
         usd_rate: usdRate,
+        entry_type: entryType,
       });
 
       setSelectedProductId(null);
@@ -108,6 +121,7 @@ export default function PurchasesScreen() {
       setStore('');
       setNotes('');
       setPurchaseStatus('pending');
+      setEntryType('purchase');
       setModalVisible(false);
       loadData();
     } catch (err) {
@@ -115,36 +129,50 @@ export default function PurchasesScreen() {
     }
   };
 
-  const pendingPurchases = purchases.filter((p) => p.status === 'pending');
-  const totalPending = pendingPurchases.reduce((acc, p) => acc + p.total_amount, 0);
+  const spendingStats = computeSpendingStats(purchases, timeFilter, customDays);
 
   const renderPurchaseItem = ({ item }: { item: Purchase }) => {
     const isPending = item.status === 'pending';
+    const isReference = item.entry_type === 'reference';
 
     return (
       <View style={styles.card}>
         <View style={styles.topRow}>
           <Text style={styles.productName}>{item.product_name}</Text>
-          <TouchableOpacity
-            style={[styles.statusBadge, isPending ? styles.badgePending : styles.badgeSettled]}
-            onPress={() => handleToggleStatus(item)}
-          >
-            <Ionicons
-              name={isPending ? 'time-outline' : 'checkmark-circle-outline'}
-              size={12}
-              color={isPending ? colors.warning : colors.success}
-            />
-            <Text style={[styles.statusText, isPending ? { color: colors.warning } : { color: colors.success }]}>
-              {isPending ? t('settlement.pending_badge') : t('settlement.settled_badge')}
-            </Text>
-          </TouchableOpacity>
+          {isReference ? (
+            <View style={styles.badgeReference}>
+              <Ionicons name="pricetag-outline" size={11} color="#818cf8" />
+              <Text style={styles.badgeReferenceText}>{t('purchases.reference_badge')}</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.statusBadge, isPending ? styles.badgePending : styles.badgeSettled]}
+              onPress={() => handleToggleStatus(item)}
+            >
+              <Ionicons
+                name={isPending ? 'time-outline' : 'checkmark-circle-outline'}
+                size={12}
+                color={isPending ? colors.warning : colors.success}
+              />
+              <Text style={[styles.statusText, isPending ? { color: colors.warning } : { color: colors.success }]}>
+                {isPending ? t('settlement.pending_badge') : t('settlement.settled_badge')}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.calcRow}>
-          <Text style={styles.calcText}>
-            {formatCurrency(item.unit_price)} × {item.quantity} ={' '}
-            <Text style={styles.totalText}>{formatCurrency(item.total_amount)}</Text>
-          </Text>
+          {isReference ? (
+            <Text style={styles.calcText}>
+              {formatCurrency(item.unit_price)}{' '}
+              <Text style={styles.refSubtext}>({t('purchases.reference_badge')})</Text>
+            </Text>
+          ) : (
+            <Text style={styles.calcText}>
+              {formatCurrency(item.unit_price)} × {item.quantity} ={' '}
+              <Text style={styles.totalText}>{formatCurrency(item.total_amount)}</Text>
+            </Text>
+          )}
           <TouchableOpacity onPress={() => handleDelete(item.id)}>
             <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
           </TouchableOpacity>
@@ -155,7 +183,7 @@ export default function PurchasesScreen() {
             {formatDateTime(item.purchase_date)}
             {item.store ? ` • ${item.store}` : ''} • 👤 {item.buyer || 'Parents'}
           </Text>
-          {item.usd_rate && (
+          {!isReference && item.usd_rate && (
             <Text style={styles.usdText}>
               ≈ ${(item.total_amount / item.usd_rate).toFixed(2)} USD
             </Text>
@@ -167,18 +195,104 @@ export default function PurchasesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Banner: Total Pending to Repay */}
+      {/* Top Banner: Total Pending to Repay & Spending Stats */}
       <View style={styles.bannerCard}>
-        <View>
-          <Text style={styles.bannerLabel}>{t('settlement.total_to_pay')}</Text>
-          <Text style={styles.bannerAmount}>{formatCurrency(totalPending)}</Text>
+        <View style={styles.bannerMainRow}>
+          <View>
+            <Text style={styles.bannerLabel}>{t('settlement.total_to_pay')}</Text>
+            <Text style={styles.bannerAmount}>{formatCurrency(spendingStats.totalOwedPending)}</Text>
+          </View>
+          <View style={styles.bannerRight}>
+            <View style={styles.bannerPill}>
+              <Text style={styles.bannerPillText}>
+                {spendingStats.purchasesCount} {t('nav.purchases').toLowerCase()}
+                {spendingStats.referenceCount > 0 ? ` • ${spendingStats.referenceCount} ref` : ''}
+              </Text>
+            </View>
+            <Text style={styles.totalPeriodText}>
+              {t('time_filter.total_period')}: {formatCurrency(spendingStats.totalSpent)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.bannerPill}>
-          <Text style={styles.bannerPillText}>{pendingPurchases.length} pending</Text>
+
+        {/* Spending Averages Grid */}
+        <View style={styles.averagesDivider} />
+        <View style={styles.averagesRow}>
+          <View style={styles.averageItem}>
+            <Text style={styles.averageItemLabel}>{t('time_filter.avg_per_day')}</Text>
+            <Text style={styles.averageItemValue}>{formatCurrency(spendingStats.avgPerDay)}</Text>
+          </View>
+          <View style={styles.averageSeparator} />
+          <View style={styles.averageItem}>
+            <Text style={styles.averageItemLabel}>{t('time_filter.avg_per_week')}</Text>
+            <Text style={styles.averageItemValue}>{formatCurrency(spendingStats.avgPerWeek)}</Text>
+          </View>
+          <View style={styles.averageSeparator} />
+          <View style={styles.averageItem}>
+            <Text style={styles.averageItemLabel}>{t('time_filter.avg_per_month')}</Text>
+            <Text style={styles.averageItemValue}>{formatCurrency(spendingStats.avgPerMonth)}</Text>
+          </View>
         </View>
       </View>
 
-      {/* Filter Tabs */}
+      {/* Time Filter Tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeFilterContainer}>
+        <TouchableOpacity
+          style={[styles.timeChip, timeFilter === 'all' && styles.timeChipActive]}
+          onPress={() => setTimeFilter('all')}
+        >
+          <Text style={[styles.timeChipText, timeFilter === 'all' && styles.timeChipTextActive]}>
+            {t('common.all')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.timeChip, timeFilter === 'day' && styles.timeChipActive]}
+          onPress={() => setTimeFilter('day')}
+        >
+          <Text style={[styles.timeChipText, timeFilter === 'day' && styles.timeChipTextActive]}>
+            {t('time_filter.day')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.timeChip, timeFilter === 'week' && styles.timeChipActive]}
+          onPress={() => setTimeFilter('week')}
+        >
+          <Text style={[styles.timeChipText, timeFilter === 'week' && styles.timeChipTextActive]}>
+            {t('time_filter.week')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.timeChip, timeFilter === 'month' && styles.timeChipActive]}
+          onPress={() => setTimeFilter('month')}
+        >
+          <Text style={[styles.timeChipText, timeFilter === 'month' && styles.timeChipTextActive]}>
+            {t('time_filter.month')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.timeChip, timeFilter === 'custom' && styles.timeChipActive]}
+          onPress={() => {
+            if (timeFilter === 'custom') {
+              setCustomModalVisible(true);
+            } else {
+              setTimeFilter('custom');
+            }
+          }}
+          onLongPress={() => setCustomModalVisible(true)}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={12}
+            color={timeFilter === 'custom' ? '#FFFFFF' : colors.textSecondary}
+            style={{ marginRight: 4 }}
+          />
+          <Text style={[styles.timeChipText, timeFilter === 'custom' && styles.timeChipTextActive]}>
+            {timeFilter === 'custom' ? `${customDays}d` : t('time_filter.custom')}
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Status & Entry Type Filter Row */}
       <View style={styles.filterRow}>
         <TouchableOpacity
           style={[styles.filterBtn, statusFilter === 'all' && styles.filterBtnActive]}
@@ -202,6 +316,32 @@ export default function PurchasesScreen() {
         >
           <Text style={[styles.filterBtnText, statusFilter === 'settled' && styles.filterBtnTextActive]}>
             {t('settlement.settled_badge')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterBtn,
+            entryTypeFilter !== 'all' && styles.filterBtnActive,
+            { maxWidth: 95 },
+          ]}
+          onPress={() => {
+            if (entryTypeFilter === 'all') setEntryTypeFilter('purchase');
+            else if (entryTypeFilter === 'purchase') setEntryTypeFilter('reference');
+            else setEntryTypeFilter('all');
+          }}
+        >
+          <Text
+            style={[
+              styles.filterBtnText,
+              entryTypeFilter !== 'all' && styles.filterBtnTextActive,
+            ]}
+            numberOfLines={1}
+          >
+            {entryTypeFilter === 'all'
+              ? '🏷️ ' + t('common.all')
+              : entryTypeFilter === 'purchase'
+              ? '🛒 ' + t('nav.purchases')
+              : '🔍 Ref'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -241,6 +381,59 @@ export default function PurchasesScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>{t('purchases.entry_type')}</Text>
+              <View style={styles.entryTypeRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.entryTypeBtn,
+                    entryType === 'purchase' && styles.entryTypeBtnActivePurchase,
+                  ]}
+                  onPress={() => setEntryType('purchase')}
+                >
+                  <Ionicons
+                    name="cart-outline"
+                    size={15}
+                    color={entryType === 'purchase' ? colors.primary : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.entryTypeText,
+                      entryType === 'purchase' && styles.entryTypeTextActive,
+                    ]}
+                  >
+                    {t('purchases.type_purchase')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.entryTypeBtn,
+                    entryType === 'reference' && styles.entryTypeBtnActiveReference,
+                  ]}
+                  onPress={() => setEntryType('reference')}
+                >
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={15}
+                    color={entryType === 'reference' ? '#818cf8' : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.entryTypeText,
+                      entryType === 'reference' && { color: '#818cf8', fontWeight: '700' },
+                    ]}
+                  >
+                    {t('purchases.type_reference')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {entryType === 'reference' && (
+                <Text style={styles.referenceHintText}>
+                  ℹ️ {t('purchases.type_reference_hint')}
+                </Text>
+              )}
+
               <Text style={styles.inputLabel}>{t('purchases.product')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.prodPicker}>
                 {products.map((p) => (
@@ -274,15 +467,19 @@ export default function PurchasesScreen() {
                 onChangeText={setUnitPrice}
               />
 
-              <Text style={styles.inputLabel}>{t('purchases.quantity')}</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="1"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="numeric"
-                value={quantity}
-                onChangeText={setQuantity}
-              />
+              {entryType === 'purchase' && (
+                <>
+                  <Text style={styles.inputLabel}>{t('purchases.quantity')}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="1"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={quantity}
+                    onChangeText={setQuantity}
+                  />
+                </>
+              )}
 
               <Text style={styles.inputLabel}>{t('purchases.store')}</Text>
               <TextInput
@@ -293,55 +490,100 @@ export default function PurchasesScreen() {
                 onChangeText={setStore}
               />
 
-              <Text style={styles.inputLabel}>{t('purchases.buyer')}</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder={t('purchases.buyer_placeholder')}
-                placeholderTextColor={colors.textMuted}
-                value={buyer}
-                onChangeText={setBuyer}
-              />
+              {entryType === 'purchase' && (
+                <>
+                  <Text style={styles.inputLabel}>{t('purchases.buyer')}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder={t('purchases.buyer_placeholder')}
+                    placeholderTextColor={colors.textMuted}
+                    value={buyer}
+                    onChangeText={setBuyer}
+                  />
 
-              <Text style={styles.inputLabel}>{t('purchases.status')}</Text>
-              <View style={styles.statusToggleRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.statusToggleBtn,
-                    purchaseStatus === 'pending' && styles.statusToggleActivePending,
-                  ]}
-                  onPress={() => setPurchaseStatus('pending')}
-                >
-                  <Text
-                    style={[
-                      styles.statusToggleText,
-                      purchaseStatus === 'pending' && { color: colors.warning, fontWeight: '700' },
-                    ]}
-                  >
-                    {t('purchases.status_pending')}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.statusToggleBtn,
-                    purchaseStatus === 'settled' && styles.statusToggleActiveSettled,
-                  ]}
-                  onPress={() => setPurchaseStatus('settled')}
-                >
-                  <Text
-                    style={[
-                      styles.statusToggleText,
-                      purchaseStatus === 'settled' && { color: colors.success, fontWeight: '700' },
-                    ]}
-                  >
-                    {t('purchases.status_settled')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                  <Text style={styles.inputLabel}>{t('purchases.status')}</Text>
+                  <View style={styles.statusToggleRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.statusToggleBtn,
+                        purchaseStatus === 'pending' && styles.statusToggleActivePending,
+                      ]}
+                      onPress={() => setPurchaseStatus('pending')}
+                    >
+                      <Text
+                        style={[
+                          styles.statusToggleText,
+                          purchaseStatus === 'pending' && { color: colors.warning, fontWeight: '700' },
+                        ]}
+                      >
+                        {t('purchases.status_pending')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.statusToggleBtn,
+                        purchaseStatus === 'settled' && styles.statusToggleActiveSettled,
+                      ]}
+                      onPress={() => setPurchaseStatus('settled')}
+                    >
+                      <Text
+                        style={[
+                          styles.statusToggleText,
+                          purchaseStatus === 'settled' && { color: colors.success, fontWeight: '700' },
+                        ]}
+                      >
+                        {t('purchases.status_settled')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
 
               <TouchableOpacity style={styles.saveBtn} onPress={handleAddPurchase}>
                 <Text style={styles.saveBtnText}>{t('common.save')}</Text>
               </TouchableOpacity>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Days Modal */}
+      <Modal visible={customModalVisible} animationType="fade" transparent>
+        <View style={styles.customModalOverlay}>
+          <View style={styles.customModalContent}>
+            <Text style={styles.customModalTitle}>{t('time_filter.custom_days')}</Text>
+            <Text style={styles.customModalSubtitle}>
+              {t('time_filter.enter_days')}
+            </Text>
+            <TextInput
+              style={styles.customModalInput}
+              keyboardType="number-pad"
+              value={customDaysInput}
+              onChangeText={setCustomDaysInput}
+              placeholder="15"
+              placeholderTextColor={colors.textMuted}
+            />
+            <View style={styles.customModalBtnRow}>
+              <TouchableOpacity
+                style={styles.customModalCancelBtn}
+                onPress={() => setCustomModalVisible(false)}
+              >
+                <Text style={styles.customModalCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.customModalApplyBtn}
+                onPress={() => {
+                  const val = parseInt(customDaysInput, 10);
+                  if (!isNaN(val) && val > 0) {
+                    setCustomDays(val);
+                    setTimeFilter('custom');
+                  }
+                  setCustomModalVisible(false);
+                }}
+              >
+                <Text style={styles.customModalApplyText}>{t('time_filter.apply')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -355,9 +597,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   bannerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginTop: 12,
@@ -365,6 +604,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  bannerMainRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  bannerRight: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
   bannerLabel: {
     fontSize: 11,
@@ -386,8 +634,93 @@ const styles = StyleSheet.create({
   },
   bannerPillText: {
     color: colors.warning,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  totalPeriodText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  averagesDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 12,
+  },
+  averagesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  averageItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  averageItemLabel: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  averageItemValue: {
     fontSize: 12,
     fontWeight: '700',
+    color: colors.text,
+  },
+  averageSeparator: {
+    width: 1,
+    height: 22,
+    backgroundColor: colors.border,
+  },
+  timeFilterContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 2,
+    gap: 8,
+  },
+  timeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  timeChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  timeChipText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  timeChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  badgeReference: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(99,102,241,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.3)',
+    gap: 4,
+  },
+  badgeReferenceText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#818cf8',
+  },
+  refSubtext: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontStyle: 'italic',
   },
   filterRow: {
     flexDirection: 'row',
@@ -617,6 +950,118 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: '#FFFFFF',
     fontSize: 15,
+    fontWeight: '700',
+  },
+  entryTypeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 8,
+  },
+  entryTypeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceElevated,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  entryTypeBtnActivePurchase: {
+    borderColor: colors.primary,
+    backgroundColor: colors.surfaceElevated,
+  },
+  entryTypeBtnActiveReference: {
+    borderColor: '#818cf8',
+    backgroundColor: 'rgba(99,102,241,0.1)',
+  },
+  entryTypeText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  entryTypeTextActive: {
+    color: colors.text,
+    fontWeight: '700',
+  },
+  referenceHintText: {
+    fontSize: 11,
+    color: '#818cf8',
+    backgroundColor: 'rgba(99,102,241,0.1)',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  customModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  customModalContent: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  customModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  customModalSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: 14,
+  },
+  customModalInput: {
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  customModalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  customModalCancelBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  customModalCancelText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  customModalApplyBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+  },
+  customModalApplyText: {
+    fontSize: 13,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
 });
