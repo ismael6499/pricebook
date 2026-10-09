@@ -19,9 +19,24 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 
 let hasSyncedPlanPrices = false;
 
+export async function ensureSchemaMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
+  try {
+    const tableInfo = await db.getAllAsync<{ name: string }>('PRAGMA table_info(purchases);');
+    const hasEntryType = tableInfo.some((col) => col.name === 'entry_type');
+    if (!hasEntryType) {
+      await db.execAsync("ALTER TABLE purchases ADD COLUMN entry_type TEXT DEFAULT 'purchase';");
+    }
+    await db.execAsync('CREATE INDEX IF NOT EXISTS idx_purchases_type ON purchases(entry_type);');
+  } catch (err) {
+    console.warn('Schema migration warning:', err);
+  }
+}
+
 export async function syncPlanPricesToProducts(dbInstance?: SQLite.SQLiteDatabase): Promise<void> {
   try {
     const db = dbInstance || (await getDatabase());
+    await ensureSchemaMigrations(db);
+
     const planItems = await db.getAllAsync<MonthlyPlanItem>(
       'SELECT * FROM monthly_plan_items'
     );
@@ -81,10 +96,21 @@ export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
   if (isInitialized) return;
   try {
     await db.execAsync(INITIAL_SCHEMA);
+  } catch (err) {
+    console.warn('Database initialization warning:', err);
+  }
+
+  try {
+    await ensureSchemaMigrations(db);
+  } catch (migErr) {
+    console.warn('Database schema migration warning:', migErr);
+  }
+
+  try {
     await syncPlanPricesToProducts(db);
     hasSyncedPlanPrices = true;
   } catch (err) {
-    console.warn('Database initialization warning:', err);
+    console.warn('Sync plan prices warning:', err);
   }
   isInitialized = true;
 }

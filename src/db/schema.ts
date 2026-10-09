@@ -63,7 +63,6 @@ CREATE TABLE IF NOT EXISTS purchases (
 CREATE INDEX IF NOT EXISTS idx_purchases_product_id ON purchases(product_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(purchase_date);
 CREATE INDEX IF NOT EXISTS idx_purchases_status ON purchases(status);
-CREATE INDEX IF NOT EXISTS idx_purchases_type ON purchases(entry_type);
 
 CREATE TABLE IF NOT EXISTS monthly_plan_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
