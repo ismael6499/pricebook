@@ -22,6 +22,7 @@
   "nav": {
     "products": "Productos",
     "purchases": "Compras",
+    "plan": "Canasta Mensual",
     "trends": "Tendencias",
     "settlement": "Liquidación",
     "settings": "Ajustes"
@@ -128,5 +129,22 @@
     "version": "Versión 1.0.0",
     "clean_database": "Restablecer Base de Datos",
     "clean_database_confirm": "¿Estás seguro de restablecer todos los datos? Esta acción no se puede deshacer."
+  },
+  "plan": {
+    "title": "Canasta Mensual Habitual",
+    "subtitle": "Presupuesto estimado para compras recurrentes",
+    "add_item": "Agregar Ítem al Plan",
+    "edit_item": "Editar Ítem del Plan",
+    "item_name": "Nombre del Ítem",
+    "unit_desc": "Frecuencia / Unidad",
+    "unit_desc_placeholder": "ej. 1/día, 8 paq/mes, 1/semana",
+    "estimated_unit_price": "Precio Unitario Estimado",
+    "monthly_qty": "Cantidad Mensual",
+    "monthly_total": "Total Mensual Estimado",
+    "total_budget": "Presupuesto Total Estimado",
+    "real_vs_plan": "Precio Real vs Estimado",
+    "delete_confirm": "¿Estás seguro de eliminar este ítem del plan?",
+    "record_as_purchase": "Registrar como Compra Real",
+    "notes": "Notas del Plan"
   }
 }

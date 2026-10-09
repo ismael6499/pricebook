@@ -93,6 +93,20 @@ export interface MonthlySummary {
   }>;
 }
 
+export interface MonthlyPlanItem {
+  id: number;
+  name: string;
+  category: string;
+  unit_desc: string | null;
+  estimated_unit_price: number;
+  estimated_monthly_qty: number;
+  estimated_monthly_total: number;
+  notes: string | null;
+  created_at: string;
+  current_real_price?: number;
+  variation_vs_estimate?: number;
+}
+
 // -------------------------------------------------------------------------
 // Categories CRUD
 // -------------------------------------------------------------------------
@@ -548,4 +562,89 @@ export async function restoreDatabaseFromJson(backup: any): Promise<void> {
   }
 
   await db.execAsync('PRAGMA foreign_keys = ON;');
+}
+
+// -------------------------------------------------------------------------
+// Monthly Plan / Recurring Basket CRUD
+// -------------------------------------------------------------------------
+
+export async function getMonthlyPlanItems(): Promise<MonthlyPlanItem[]> {
+  const db = await getDatabase();
+  const items = await db.getAllAsync<MonthlyPlanItem>('SELECT * FROM monthly_plan_items ORDER BY estimated_monthly_total DESC');
+
+  const products = await getAllProducts();
+  const prodMap = new Map<string, number>();
+  products.forEach((p) => {
+    if (p.latest_price) prodMap.set(p.name.toLowerCase().trim(), p.latest_price);
+  });
+
+  return items.map((item) => {
+    const realPrice = prodMap.get(item.name.toLowerCase().trim());
+    let variation = 0;
+    if (realPrice && item.estimated_unit_price > 0) {
+      variation = ((realPrice - item.estimated_unit_price) / item.estimated_unit_price) * 100;
+    }
+    return {
+      ...item,
+      current_real_price: realPrice,
+      variation_vs_estimate: Number(variation.toFixed(1)),
+    };
+  });
+}
+
+export async function createMonthlyPlanItem(data: {
+  name: string;
+  category?: string;
+  unit_desc?: string;
+  estimated_unit_price: number;
+  estimated_monthly_qty: number;
+  notes?: string;
+}): Promise<number> {
+  const db = await getDatabase();
+  const total = Number((data.estimated_unit_price * data.estimated_monthly_qty).toFixed(2));
+  const res = await db.runAsync(
+    `INSERT INTO monthly_plan_items (name, category, unit_desc, estimated_unit_price, estimated_monthly_qty, estimated_monthly_total, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    data.name.trim(),
+    data.category || 'General',
+    data.unit_desc || '',
+    data.estimated_unit_price,
+    data.estimated_monthly_qty,
+    total,
+    data.notes || null
+  );
+  return res.lastInsertRowId;
+}
+
+export async function updateMonthlyPlanItem(
+  id: number,
+  data: {
+    name: string;
+    category?: string;
+    unit_desc?: string;
+    estimated_unit_price: number;
+    estimated_monthly_qty: number;
+    notes?: string;
+  }
+): Promise<void> {
+  const db = await getDatabase();
+  const total = Number((data.estimated_unit_price * data.estimated_monthly_qty).toFixed(2));
+  await db.runAsync(
+    `UPDATE monthly_plan_items
+     SET name = ?, category = ?, unit_desc = ?, estimated_unit_price = ?, estimated_monthly_qty = ?, estimated_monthly_total = ?, notes = ?
+     WHERE id = ?`,
+    data.name.trim(),
+    data.category || 'General',
+    data.unit_desc || '',
+    data.estimated_unit_price,
+    data.estimated_monthly_qty,
+    total,
+    data.notes || null,
+    id
+  );
+}
+
+export async function deleteMonthlyPlanItem(id: number): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync('DELETE FROM monthly_plan_items WHERE id = ?', id);
 }
