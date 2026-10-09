@@ -670,14 +670,28 @@ function runAudit() {
   if (errors > 0) {
     process.exit(1);
   } else {
-    console.log('🎉 UI Architecture and Localization Audit PASSED.');
+    console.log('🎉 UI Architecture and Localization Audit PASSED.\n');
   }
+
+  // Run unit tests as part of full audit
+  runUnitTests();
+}
+
+// -----------------------------------------------------------------------------
+// Interactive Unit Testing Suite Delegation (delegates to tests/run_tests.js)
+// -----------------------------------------------------------------------------
+const runAllTests = require(path.join(ROOT_DIR, 'tests', 'run_tests.js'));
+
+function runUnitTests() {
+  return runAllTests();
 }
 
 // CLI Routing
 const args = process.argv.slice(2);
 
-if (args.includes('--audit')) {
+if (args.includes('--test')) {
+  runUnitTests();
+} else if (args.includes('--audit')) {
   runAudit();
 } else if (args.includes('--list')) {
   console.log(JSON.stringify(Object.keys(screens), null, 2));
@@ -711,5 +725,7 @@ if (args.includes('--audit')) {
   console.log('  node tools/render_ui_tree.js --list');
   console.log('  node tools/render_ui_tree.js <ScreenName>');
   console.log('  node tools/render_ui_tree.js <ScreenName> --action <actionName> [payloadJson]');
+  console.log('  node tools/render_ui_tree.js --test');
   console.log('  node tools/render_ui_tree.js --audit');
 }
+

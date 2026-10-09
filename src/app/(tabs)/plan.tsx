@@ -33,7 +33,8 @@ export default function MonthlyPlanScreen() {
   const [name, setName] = useState('');
   const [calcMode, setCalcMode] = useState<'frequency' | 'standard'>('frequency');
   const [freqAmount, setFreqAmount] = useState('15000');
-  const [freqType, setFreqType] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly'>('weekly');
+  const [freqType, setFreqType] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly' | 'custom'>('weekly');
+  const [freqCustomDays, setFreqCustomDays] = useState('3');
   const [unitDesc, setUnitDesc] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [monthlyQty, setMonthlyQty] = useState('1');
@@ -41,7 +42,8 @@ export default function MonthlyPlanScreen() {
 
   // Quick Calculator state
   const [quickAmount, setQuickAmount] = useState('15000');
-  const [quickFreq, setQuickFreq] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly'>('weekly');
+  const [quickFreq, setQuickFreq] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly' | 'custom'>('weekly');
+  const [quickCustomDays, setQuickCustomDays] = useState('3');
 
   const loadData = useCallback(async () => {
     try {
@@ -91,6 +93,13 @@ export default function MonthlyPlanScreen() {
       homMonth30 = freqAmountNum;
       homMonth31 = freqAmountNum;
       homMonthAvg = freqAmountNum;
+    } else if (freqType === 'custom') {
+      const days = parseFloat(freqCustomDays) || 1;
+      homDay = freqAmountNum / days;
+      homWeek = (freqAmountNum / days) * 7;
+      homMonth30 = (freqAmountNum / days) * 30;
+      homMonth31 = (freqAmountNum / days) * 31;
+      homMonthAvg = (freqAmountNum / days) * 30.4167;
     }
   }
 
@@ -127,6 +136,13 @@ export default function MonthlyPlanScreen() {
       qMonth30 = quickAmountNum;
       qMonth31 = quickAmountNum;
       qMonthAvg = quickAmountNum;
+    } else if (quickFreq === 'custom') {
+      const days = parseFloat(quickCustomDays) || 1;
+      qDay = quickAmountNum / days;
+      qWeek = (quickAmountNum / days) * 7;
+      qMonth30 = (quickAmountNum / days) * 30;
+      qMonth31 = (quickAmountNum / days) * 31;
+      qMonthAvg = (quickAmountNum / days) * 30.4167;
     }
   }
 
@@ -156,9 +172,13 @@ export default function MonthlyPlanScreen() {
         } else if (freqType === 'biweekly') {
           finalUnitDesc = `c/15d (${formatCurrency(freqAmountNum)})`;
           finalQty = 2.17;
-        } else {
+        } else if (freqType === 'monthly') {
           finalUnitDesc = `1/mes (${formatCurrency(freqAmountNum)})`;
           finalQty = 1;
+        } else if (freqType === 'custom') {
+          const days = parseFloat(freqCustomDays) || 1;
+          finalUnitDesc = `c/${days}d (${formatCurrency(freqAmountNum)})`;
+          finalQty = Number((30.4167 / days).toFixed(2));
         }
 
         await createMonthlyPlanItem({
@@ -419,7 +439,30 @@ export default function MonthlyPlanScreen() {
                         {t('plan.freq_monthly')}
                       </Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.freqChip, freqType === 'custom' && styles.freqChipActive]}
+                      onPress={() => setFreqType('custom')}
+                    >
+                      <Text style={[styles.freqChipText, freqType === 'custom' && styles.freqChipTextActive]}>
+                        {freqType === 'custom' ? `${freqCustomDays}d` : t('plan.freq_custom')}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
+
+                  {freqType === 'custom' && (
+                    <View style={styles.customDaysRow}>
+                      <Text style={styles.subLabel}>{t('plan.custom_days_label')}</Text>
+                      <TextInput
+                        style={styles.customDaysInput}
+                        keyboardType="numeric"
+                        value={freqCustomDays}
+                        onChangeText={setFreqCustomDays}
+                        placeholder="3"
+                        placeholderTextColor={colors.textMuted}
+                      />
+                    </View>
+                  )}
 
                   {/* Live Projections Card */}
                   <View style={styles.homologationCard}>
@@ -562,7 +605,30 @@ export default function MonthlyPlanScreen() {
                     {t('plan.freq_monthly')}
                   </Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.freqChip, quickFreq === 'custom' && styles.freqChipActive]}
+                  onPress={() => setQuickFreq('custom')}
+                >
+                  <Text style={[styles.freqChipText, quickFreq === 'custom' && styles.freqChipTextActive]}>
+                    {quickFreq === 'custom' ? `${quickCustomDays}d` : t('plan.freq_custom')}
+                  </Text>
+                </TouchableOpacity>
               </View>
+
+              {quickFreq === 'custom' && (
+                <View style={styles.customDaysRow}>
+                  <Text style={styles.subLabel}>{t('plan.custom_days_label')}</Text>
+                  <TextInput
+                    style={styles.customDaysInput}
+                    keyboardType="numeric"
+                    value={quickCustomDays}
+                    onChangeText={setQuickCustomDays}
+                    placeholder="3"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+              )}
 
               {/* Homologation Breakdown */}
               <View style={[styles.homologationCard, { marginTop: 16 }]}>
@@ -971,5 +1037,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  customDaysRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  subLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  customDaysInput: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    color: colors.text,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    width: 60,
+    textAlign: 'center',
   },
 });

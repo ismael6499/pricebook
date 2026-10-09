@@ -15,7 +15,7 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
   const [customAmount, setCustomAmount] = useState<string>(unitPrice > 0 ? String(unitPrice) : '');
 
   // Frequency basis
-  const [basis, setBasis] = useState<'week' | 'day' | 'custom' | 'month'>('week');
+  const [basis, setBasis] = useState<'week' | 'day' | 'biweekly' | 'month' | 'custom'>('week');
   const [customDays, setCustomDays] = useState('3');
 
   // Weight / Units state
@@ -45,6 +45,12 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
       costPerMonth30 = parsedAmount * 30;
       costPerMonth31 = parsedAmount * 31;
       costPerMonthAvg = parsedAmount * 30.4167;
+    } else if (basis === 'biweekly') {
+      costPerDay = parsedAmount / 15;
+      costPerWeek = (parsedAmount / 15) * 7;
+      costPerMonth30 = parsedAmount * 2;
+      costPerMonth31 = (parsedAmount / 15) * 31;
+      costPerMonthAvg = (parsedAmount / 15) * 30.4167;
     } else if (basis === 'month') {
       costPerMonth30 = parsedAmount;
       costPerMonth31 = parsedAmount;
@@ -139,6 +145,24 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.chip, basis === 'biweekly' && styles.chipActive]}
+              onPress={() => setBasis('biweekly')}
+            >
+              <Text style={[styles.chipText, basis === 'biweekly' && styles.chipTextActive]}>
+                {t('unit_calculator.rate_biweekly')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.chip, basis === 'month' && styles.chipActive]}
+              onPress={() => setBasis('month')}
+            >
+              <Text style={[styles.chipText, basis === 'month' && styles.chipTextActive]}>
+                {t('unit_calculator.rate_1_per_month')}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.chip, basis === 'custom' && styles.chipActive]}
               onPress={() => setBasis('custom')}
             >
@@ -150,7 +174,7 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
 
           {basis === 'custom' && (
             <View style={styles.customDaysRow}>
-              <Text style={styles.subLabel}>Days per period:</Text>
+              <Text style={styles.subLabel}>{t('plan.custom_days_label')}</Text>
               <TextInput
                 style={styles.customDaysInput}
                 keyboardType="numeric"
@@ -336,12 +360,12 @@ const styles = StyleSheet.create({
   },
   presetChipsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   chip: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     borderRadius: 8,
     backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
