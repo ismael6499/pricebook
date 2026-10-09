@@ -28,10 +28,31 @@ yarn-error.*
 
 # macOS
 .DS_Store
+# local env files and secrets
+.env
+.env.*
+*.env
 *.pem
+*.key
+*.jks
+*.keystore
 
-# local env files
-.env*.local
+# SQLite and local databases
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-journal
+
+# Personal backups and data
+backups/
+*.backup.json
+*personal*
+*.local
+
+# Logs
+*.log
 
 # typescript
 *.tsbuildinfo

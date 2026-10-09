@@ -99,52 +99,24 @@ INSERT OR IGNORE INTO app_settings (key, value) VALUES
 `;
 
 /**
- * Agustín's personal template and historical baseline ($850.000 September settlement + 11 habitual items)
- * Kept separate from INITIAL_SCHEMA so that public GitHub releases remain clean and generic for any user.
+ * Generic sample template for demonstration and new user onboarding.
  */
-export const AGUSTIN_SEED_SQL = `
--- Seed Agustín's Habitual Products Catalog
+export const SAMPLE_SEED_SQL = `
+-- Seed Sample Products
 INSERT OR IGNORE INTO products (id, name, category, unit, notes) VALUES
-  (1, 'Milanesas', 'Meat & Fish', '1 portion', 'Beef or chicken milanesas ($5,000 / day)'),
-  (2, 'Brócoli', 'Groceries', '1 pack', 'Frozen or fresh broccoli pack ($7,000 - $7,500)'),
-  (3, 'Espinaca', 'Groceries', '1 pack', 'Spinach pack ($5,000)'),
-  (4, 'Huevos', 'Groceries', 'Tray x20', 'Eggs ($7,000 per 20 eggs)'),
-  (5, 'Queso', 'Dairy', 'Weekly', 'Cheese ($15,000 - $17,500 / week)'),
-  (6, 'Lentejas', 'Groceries', '1 pack', 'Dry lentils ($6,000 / week)'),
-  (7, 'Manzanas', 'Groceries', '2 units', 'Apples ($2,000 / day)'),
-  (8, 'Banana', 'Groceries', '2 units', 'Bananas (2 / day)'),
-  (9, 'Agua (Botellas)', 'Groceries', '1 bottle', 'Water bottles ($2,500 each)'),
-  (10, 'Aceite', 'Groceries', '1 bottle', 'Oil ($15,000 / month)'),
-  (11, 'Ajuste / Varios', 'General', '1 u', 'Settlement adjustment and miscellaneous expenses');
+  (1, 'Apples', 'Groceries', '1 kg', 'Fresh red apples'),
+  (2, 'Milk', 'Dairy', '1 L', 'Whole milk carton'),
+  (3, 'Eggs', 'Groceries', '12 units', 'Fresh eggs dozen'),
+  (4, 'Bread', 'Bakery', '1 loaf', 'Artisan whole wheat loaf'),
+  (5, 'Coffee', 'Groceries', '500g', 'Ground roasted coffee');
 
--- Seed Agustín's Habitual Monthly Plan Template
+-- Seed Sample Monthly Plan Items
 INSERT OR IGNORE INTO monthly_plan_items (id, name, category, unit_desc, estimated_unit_price, estimated_monthly_qty, estimated_monthly_total, notes) VALUES
-  (1, 'Milanesas', 'Meat & Fish', '1 portion / day', 5000.0, 31, 155000.0, '$5,000 / day'),
-  (2, 'Brócoli', 'Groceries', '8 packs / month', 7500.0, 8, 60000.0, '$7,000 - $7,500 / pack'),
-  (3, 'Espinaca', 'Groceries', '8 packs / month', 5000.0, 8, 40000.0, '$5,000 / pack'),
-  (4, 'Huevos', 'Groceries', '248 units / month', 362.9, 248, 90000.0, '$7,000 per 20 eggs'),
-  (5, 'Queso', 'Dairy', '4 weeks / month', 17500.0, 4, 70000.0, '$15,000 - $17,500 / week'),
-  (6, 'Lentejas', 'Groceries', '4 weeks / month', 6250.0, 4, 25000.0, '$6,000 / week'),
-  (7, 'Manzanas', 'Groceries', '62 units (2/day)', 1000.0, 62, 62000.0, '2 / day ($2,000 / day)'),
-  (8, 'Banana', 'Groceries', '62 bananas (2/day)', 1000.0, 62, 62000.0, '2 bananas / day'),
-  (9, 'Agua (Botellas)', 'Groceries', '93 bottles / month', 2500.0, 93, 232500.0, '$2,500 each bottle x 93 u'),
-  (10, 'Aceite', 'Groceries', '1 bottle / month', 15000.0, 1, 15000.0, '$15,000 / month');
-
--- Seed September 2026 Settlement Closure ($850.000)
-INSERT OR IGNORE INTO settlements (id, period, total_settled, purchases_count, settled_at, payment_method, notes) VALUES
-  (1, '2026-09', 850000.0, 11, '2026-09-30 20:00:00', 'Transferencia', 'Liquidación Septiembre 2026 saldada a los padres');
-
--- Seed September 2026 Settled Purchases Totaling Exactly $850.000
-INSERT OR IGNORE INTO purchases (id, product_id, unit_price, quantity, total_amount, purchase_date, store, buyer, status, settlement_id, entry_type, notes) VALUES
-  (1, 1, 5000.0, 31, 155000.0, '2026-09-28 12:00:00', 'Carnicería', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (2, 2, 7500.0, 8, 60000.0, '2026-09-28 12:05:00', 'Verdulería', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (3, 3, 5000.0, 8, 40000.0, '2026-09-28 12:10:00', 'Verdulería', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (4, 4, 362.9, 248, 90000.0, '2026-09-28 12:15:00', 'Granja', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (5, 5, 17500.0, 4, 70000.0, '2026-09-28 12:20:00', 'Fiambrería', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (6, 6, 6250.0, 4, 25000.0, '2026-09-28 12:25:00', 'Supermercado', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (7, 7, 1000.0, 62, 62000.0, '2026-09-28 12:30:00', 'Verdulería', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (8, 8, 1000.0, 62, 62000.0, '2026-09-28 12:35:00', 'Verdulería', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (9, 9, 2500.0, 93, 232500.0, '2026-09-28 12:40:00', 'Distribuidora', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (10, 10, 15000.0, 1, 15000.0, '2026-09-28 12:45:00', 'Supermercado', 'Parents', 'settled', 1, 'purchase', 'Mes Septiembre'),
-  (11, 11, 38500.0, 1, 38500.0, '2026-09-28 12:50:00', 'Varios', 'Parents', 'settled', 1, 'purchase', 'Ajuste de liquidación Septiembre');
+  (1, 'Apples', 'Groceries', '4 kg / month', 2500.0, 4, 10000.0, 'Weekly grocery budget'),
+  (2, 'Milk', 'Dairy', '8 L / month', 1800.0, 8, 14400.0, '2 cartons per week'),
+  (3, 'Eggs', 'Groceries', '2 packs / month', 3200.0, 2, 6400.0, 'Biweekly dozen'),
+  (4, 'Bread', 'Bakery', '4 loaves / month', 2200.0, 4, 8800.0, '1 loaf per week'),
+  (5, 'Coffee', 'Groceries', '2 bags / month', 6500.0, 2, 13000.0, 'Monthly coffee beans');
 `;
+
+export const AGUSTIN_SEED_SQL = SAMPLE_SEED_SQL;

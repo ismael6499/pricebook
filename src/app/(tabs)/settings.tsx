@@ -28,6 +28,8 @@ export default function SettingsScreen() {
   const [autoUsd, setAutoUsd] = useState(true);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [devModeUnlocked, setDevModeUnlocked] = useState(false);
+  const [tapCount, setTapCount] = useState(0);
 
   useEffect(() => {
     loadSettings();
@@ -41,8 +43,24 @@ export default function SettingsScreen() {
       setBackups(bList);
       const autoSetting = await getSetting('auto_fetch_usd', 'true');
       setAutoUsd(autoSetting === 'true');
+      const devSetting = await getSetting('dev_mode_unlocked', 'false');
+      setDevModeUnlocked(devSetting === 'true');
     } catch (err) {
       console.warn('Error loading settings:', err);
+    }
+  };
+
+  const handleVersionTap = async () => {
+    if (devModeUnlocked) {
+      Alert.alert(t('common.info'), 'Developer / Sample Mode is active.');
+      return;
+    }
+    const next = tapCount + 1;
+    setTapCount(next);
+    if (next >= 7) {
+      setDevModeUnlocked(true);
+      await setSetting('dev_mode_unlocked', 'true');
+      Alert.alert('🛠️ Mode Unlocked', 'Developer & Sample Template options are now enabled.');
     }
   };
 
@@ -205,33 +223,35 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Agustín's Personal Habitual Basket & Clean DB */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>{t('settings.personal_data_title')}</Text>
-        <Text style={styles.sectionDesc}>{t('settings.personal_data_desc')}</Text>
+      {/* Developer / Sample Template Data & Clean DB (Hidden by default for public users) */}
+      {devModeUnlocked && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>{t('settings.personal_data_title')}</Text>
+          <Text style={styles.sectionDesc}>{t('settings.personal_data_desc')}</Text>
 
-        <View style={styles.backupActions}>
-          <TouchableOpacity
-            style={[styles.primaryActionBtn, { backgroundColor: '#10b981' }]}
-            onPress={handleLoadPersonalBasket}
-            disabled={seeding}
-          >
-            <Ionicons name="basket-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.primaryActionBtnText}>{t('settings.load_personal_basket')}</Text>
-          </TouchableOpacity>
+          <View style={styles.backupActions}>
+            <TouchableOpacity
+              style={[styles.primaryActionBtn, { backgroundColor: '#10b981' }]}
+              onPress={handleLoadPersonalBasket}
+              disabled={seeding}
+            >
+              <Ionicons name="basket-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryActionBtnText}>{t('settings.load_personal_basket')}</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.secondaryBtn, { borderColor: colors.danger, marginTop: 4 }]}
-            onPress={handleClearData}
-            disabled={seeding}
-          >
-            <Ionicons name="trash-bin-outline" size={16} color={colors.danger} />
-            <Text style={[styles.secondaryBtnText, { color: colors.danger }]}>
-              {t('settings.clear_database_btn')}
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.secondaryBtn, { borderColor: colors.danger, marginTop: 4 }]}
+              onPress={handleClearData}
+              disabled={seeding}
+            >
+              <Ionicons name="trash-bin-outline" size={16} color={colors.danger} />
+              <Text style={[styles.secondaryBtnText, { color: colors.danger }]}>
+                {t('settings.clear_database_btn')}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* USD Blue Reference */}
       <View style={styles.sectionCard}>
@@ -298,7 +318,9 @@ export default function SettingsScreen() {
       <View style={styles.aboutCard}>
         <Ionicons name="book-outline" size={28} color={colors.primary} />
         <Text style={styles.aboutTitle}>PriceBook</Text>
-        <Text style={styles.aboutVersion}>Version 1.0.0 • Offline-First</Text>
+        <TouchableOpacity activeOpacity={0.7} onPress={handleVersionTap}>
+          <Text style={styles.aboutVersion}>Version 1.0.0 • Offline-First</Text>
+        </TouchableOpacity>
         <Text style={styles.aboutDesc}>
           Tailored for tracking purchases, grocery inflation & parent repayments.
         </Text>
