@@ -5,6 +5,9 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     name: Build Standalone Android APK
@@ -26,9 +29,6 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: 📦 Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: 📥 Install Dependencies
         run: npm ci
 
@@ -37,10 +37,22 @@ jobs:
 
       - name: 🔨 Build Android APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/PriceBook-v1.0.0.apk
 
       - name: 📤 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PriceBook.apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: PriceBook-v1.0.0.apk
+          path: android/app/build/outputs/apk/debug/PriceBook-v1.0.0.apk
+
+      - name: 🚀 Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: always()
+        with:
+          tag_name: v1.0.0
+          files: android/app/build/outputs/apk/debug/PriceBook-v1.0.0.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
