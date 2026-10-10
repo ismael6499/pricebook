@@ -41,18 +41,21 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
           cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/PriceBook-v1.0.0.apk
+          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/PriceBook-v1.0.1.apk
 
       - name: 📤 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PriceBook-v1.0.0.apk
-          path: android/app/build/outputs/apk/release/PriceBook-v1.0.0.apk
+          name: PriceBook-v1.0.1.apk
+          path: android/app/build/outputs/apk/release/PriceBook-v1.0.1.apk
 
       - name: 🚀 Attach APK to GitHub Release
         uses: softprops/action-gh-release@v2
         if: always()
         with:
           tag_name: v1.0.0
-          files: android/app/build/outputs/apk/release/PriceBook-v1.0.0.apk
+          files: |
+            android/app/build/outputs/apk/release/PriceBook-v1.0.0.apk
+            android/app/build/outputs/apk/release/PriceBook-v1.0.1.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

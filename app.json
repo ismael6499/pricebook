@@ -2,7 +2,7 @@
   "expo": {
     "name": "PriceBook",
     "slug": "PriceBook",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "pricebook",
@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.agustin.pricebook",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#121212",
         "foregroundImage": "./assets/android-icon-foreground.png",
