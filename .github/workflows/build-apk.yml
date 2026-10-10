@@ -53,7 +53,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: always()
         with:
-          tag_name: v1.0.0
+          tag_name: ${{ github.event.release.tag_name || 'v1.0.1' }}
           files: |
             android/app/build/outputs/apk/release/PriceBook-v1.0.0.apk
             android/app/build/outputs/apk/release/PriceBook-v1.0.1.apk
