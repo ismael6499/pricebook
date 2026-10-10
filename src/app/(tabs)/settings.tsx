@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import {
   performDailyAutoBackup,
   shareBackupToDriveOrFile,
@@ -319,7 +320,9 @@ export default function SettingsScreen() {
         <Ionicons name="book-outline" size={28} color={colors.primary} />
         <Text style={styles.aboutTitle}>PriceBook</Text>
         <TouchableOpacity activeOpacity={0.7} onPress={handleVersionTap}>
-          <Text style={styles.aboutVersion}>Version 1.0.0 • Offline-First</Text>
+          <Text style={styles.aboutVersion}>
+            v{Constants.expoConfig?.version || '1.0.3'} (Build {Constants.expoConfig?.android?.versionCode || 4}) • Offline-First
+          </Text>
         </TouchableOpacity>
         <Text style={styles.aboutDesc}>
           Tailored for tracking purchases, grocery inflation & parent repayments.

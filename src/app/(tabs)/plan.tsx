@@ -210,13 +210,47 @@ export default function MonthlyPlanScreen() {
   const handleEditItem = (item: MonthlyPlanItem) => {
     setEditingItem(item);
     setName(item.name);
-    setUnitDesc(item.unit_desc || '');
-    setUnitPrice(String(item.estimated_unit_price));
-    setMonthlyQty(String(item.estimated_monthly_qty));
-    setFreqAmount(String(item.estimated_unit_price));
-    setFreqUnits('');
+
+    const desc = (item.unit_desc || '').toLowerCase();
+    const isFreq = desc.includes('/wk') || desc.includes('/sem') || desc.includes('/day') ||
+                   desc.includes('/día') || desc.includes('/dia') || desc.includes('15d') ||
+                   desc.includes('/mo') || desc.includes('/mes') || desc.includes('≈') ||
+                   desc.includes('d/wk') || desc.includes('d/sem');
+
+    if (isFreq) {
+      setCalcMode('frequency');
+      if (desc.includes('/day') || desc.includes('/día') || desc.includes('/dia')) {
+        setFreqType('daily');
+        setFreqAmount(String(Math.round(item.estimated_monthly_total / 30.4167)));
+      } else if (desc.includes('15d')) {
+        setFreqType('biweekly');
+        setFreqAmount(String(Math.round(item.estimated_monthly_total / 2.17)));
+      } else if (desc.includes('/mo') || desc.includes('/mes')) {
+        setFreqType('monthly');
+        setFreqAmount(String(Math.round(item.estimated_monthly_total)));
+      } else {
+        setFreqType('weekly');
+        const weeklyAmt = Math.round(item.estimated_monthly_total / (52 / 12));
+        setFreqAmount(String(weeklyAmt || item.estimated_unit_price));
+        if (desc.includes('units') || desc.includes('unidades')) {
+          const weeklyUnits = Math.round(item.estimated_monthly_qty / (52 / 12));
+          setFreqUnits(String(weeklyUnits || ''));
+        } else {
+          setFreqUnits('');
+        }
+      }
+      setUnitPrice(String(item.estimated_unit_price));
+      setMonthlyQty(String(item.estimated_monthly_qty));
+    } else {
+      setCalcMode('standard');
+      setUnitDesc(item.unit_desc || '');
+      setUnitPrice(String(item.estimated_unit_price));
+      setMonthlyQty(String(item.estimated_monthly_qty));
+      setFreqAmount(String(item.estimated_unit_price));
+      setFreqUnits('');
+    }
+
     setNotes(item.notes || '');
-    setCalcMode('standard');
     setModalVisible(true);
   };
 

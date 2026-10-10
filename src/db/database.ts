@@ -39,10 +39,11 @@ export async function ensureSchemaMigrations(db: SQLite.SQLiteDatabase): Promise
       UPDATE monthly_plan_items SET unit_desc = '4 weeks / month' WHERE unit_desc = '4 semanas / mes';
       UPDATE monthly_plan_items SET unit_desc = '93 bottles / month' WHERE unit_desc = '93 botellas / mes';
       UPDATE monthly_plan_items SET unit_desc = '1 bottle / month' WHERE unit_desc = '1 botella / mes';
-      UPDATE products SET unit = '1 portion' WHERE unit = '1 porción';
-      UPDATE products SET unit = '2 units' WHERE unit = '2 unidades';
-      UPDATE products SET unit = '1 pack' WHERE unit = '1 paquete';
-      UPDATE products SET unit = '1 bottle' WHERE unit = '1 botella';
+      UPDATE products SET unit = '1 portion' WHERE unit = '1 porción' OR unit = '1 porción / día' OR unit = '1 portion / day';
+      UPDATE products SET unit = '2 units' WHERE unit = '2 unidades' OR unit = '2 unidades / día' OR unit = '2 units / day';
+      UPDATE products SET unit = '1 pack' WHERE unit = '1 paquete' OR unit = '8 paquetes / mes' OR unit = '8 packs / month';
+      UPDATE products SET unit = '1 bottle' WHERE unit = '1 botella' OR unit = '93 botellas / mes' OR unit = '93 bottles / month' OR unit = '1 bottle / month';
+      UPDATE products SET unit = '1 u' WHERE unit LIKE '%/día%' OR unit LIKE '%/dia%' OR unit LIKE '%/day%' OR unit LIKE '%/sem%' OR unit LIKE '%/wk%' OR unit LIKE '%/mes%' OR unit LIKE '%/month%';
     `);
   } catch (err) {
     console.warn('Schema migration warning:', err);
@@ -68,23 +69,36 @@ export async function syncPlanPricesToProducts(dbInstance?: SQLite.SQLiteDatabas
       );
 
       if (!prod) {
+        const cleanUnit = (item.unit_desc || '1 u')
+          .replace(/\s*\/\s*(día|dia|day|sem|semana|week|mes|month).*/i, '')
+          .replace(/\(.*?\)/g, '')
+          .replace(/\d+\/\w+/g, '')
+          .trim() || '1 u';
         const res = await db.runAsync(
           'INSERT INTO products (name, category, unit, notes) VALUES (?, ?, ?, ?)',
           item.name.trim(),
           item.category || 'General',
-          item.unit_desc || '1 u',
+          cleanUnit,
           item.notes || null
         );
         prod = {
           id: res.lastInsertRowId,
           name: item.name.trim(),
           category: item.category || 'General',
-          unit: item.unit_desc || '1 u',
+          unit: cleanUnit,
           image_uri: null,
           notes: item.notes || null,
           created_at: '',
           updated_at: '',
         };
+      } else if (/\s*\/\s*(día|dia|day|sem|semana|week|mes|month)/i.test(prod.unit) || /\d+\/\w+/.test(prod.unit)) {
+        const cleaned = prod.unit
+          .replace(/\s*\/\s*(día|dia|day|sem|semana|week|mes|month).*/i, '')
+          .replace(/\(.*?\)/g, '')
+          .replace(/\d+\/\w+/g, '')
+          .trim() || '1 u';
+        await db.runAsync('UPDATE products SET unit = ? WHERE id = ?', cleaned, prod.id);
+        prod.unit = cleaned;
       }
 
       const existingPurchase = await db.getFirstAsync<{ id: number }>(
@@ -1076,11 +1090,16 @@ export async function generatePurchasesFromMonthlyPlan(options?: {
   for (const item of planItems) {
     let productId = prodMap.get(item.name.toLowerCase().trim());
     if (!productId) {
+      const cleanUnit = (item.unit_desc || '1 u')
+        .replace(/\s*\/\s*(día|dia|day|sem|semana|week|mes|month).*/i, '')
+        .replace(/\(.*?\)/g, '')
+        .replace(/\d+\/\w+/g, '')
+        .trim() || '1 u';
       const res = await db.runAsync(
         'INSERT INTO products (name, category, unit, notes) VALUES (?, ?, ?, ?)',
         item.name.trim(),
         item.category || 'General',
-        item.unit_desc || '1 u',
+        cleanUnit,
         item.notes || null
       );
       productId = res.lastInsertRowId;

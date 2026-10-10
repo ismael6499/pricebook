@@ -117,7 +117,9 @@ export default function ProductDetailScreen() {
     if (!product) return;
     setEditName(product.name);
     setEditCategory(product.category);
-    setEditUnit(product.unit);
+    const rawUnit = product.unit || '1 u';
+    const cleanUnit = rawUnit.replace(/\s*\/\s*(día|dia|day|sem|semana|week|mes|month).*/i, '').replace(/1\/.*?\)/i, '1 u').trim();
+    setEditUnit(cleanUnit || '1 u');
     setEditNotes(product.notes || '');
     setEditProductModalVisible(true);
   };
@@ -724,6 +726,24 @@ export default function ProductDetailScreen() {
               />
 
               <Text style={styles.inputLabel}>{t('products.unit')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.unitChipsRow}>
+                {['1 u', '1 kg', '500 g', '1 L', '1 porción', 'maple (20u)', 'maple (30u)', 'docena (12u)', '1 pack'].map((uOption) => (
+                  <TouchableOpacity
+                    key={uOption}
+                    style={[styles.unitChip, editUnit.toLowerCase().trim() === uOption.toLowerCase().trim() && styles.unitChipActive]}
+                    onPress={() => setEditUnit(uOption)}
+                  >
+                    <Text
+                      style={[
+                        styles.unitChipText,
+                        editUnit.toLowerCase().trim() === uOption.toLowerCase().trim() && styles.unitChipTextActive,
+                      ]}
+                    >
+                      {uOption}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
               <TextInput
                 style={styles.modalInput}
                 placeholder={t('products.unit_placeholder')}
@@ -1099,6 +1119,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  unitChipsRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    marginTop: 2,
+  },
+  unitChip: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  unitChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  unitChipText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  unitChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   statusToggleRow: {
     flexDirection: 'row',
