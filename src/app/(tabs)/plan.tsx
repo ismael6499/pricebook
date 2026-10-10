@@ -641,8 +641,15 @@ export default function MonthlyPlanScreen() {
                             setUnitDesc(p.unit);
                           }
                           if (p.latest_price) {
-                            setFreqAmount(String(p.latest_price));
                             setUnitPrice(String(p.latest_price));
+                            const curAmt = parseFloat(freqAmount.replace(',', '.')) || 0;
+                            if (curAmt > 0 && p.latest_price > 0) {
+                              const autoUnits = curAmt / p.latest_price;
+                              const formatted = autoUnits >= 1 && Number.isInteger(Math.round(autoUnits * 10) / 10)
+                                ? String(Math.round(autoUnits))
+                                : (Math.round(autoUnits * 10) / 10).toString();
+                              setFreqUnits(formatted);
+                            }
                           }
                         }}
                       >
@@ -659,7 +666,24 @@ export default function MonthlyPlanScreen() {
                 placeholder="e.g. Milanesas, Huevos, Banana"
                 placeholderTextColor={colors.textMuted}
                 value={name}
-                onChangeText={setName}
+                onChangeText={(val) => {
+                  setName(val);
+                  const matched = products.find((p) => p.name.toLowerCase().trim() === val.toLowerCase().trim());
+                  if (matched) {
+                    if (matched.unit) setUnitDesc(matched.unit);
+                    if (matched.latest_price) {
+                      setUnitPrice(String(matched.latest_price));
+                      const curAmt = parseFloat(freqAmount.replace(',', '.')) || 0;
+                      if (curAmt > 0 && matched.latest_price > 0) {
+                        const autoUnits = curAmt / matched.latest_price;
+                        const formatted = autoUnits >= 1 && Number.isInteger(Math.round(autoUnits * 10) / 10)
+                          ? String(Math.round(autoUnits))
+                          : (Math.round(autoUnits * 10) / 10).toString();
+                        setFreqUnits(formatted);
+                      }
+                    }
+                  }
+                }}
               />
 
               {calcMode === 'frequency' ? (
@@ -671,7 +695,18 @@ export default function MonthlyPlanScreen() {
                     placeholderTextColor={colors.textMuted}
                     keyboardType="numeric"
                     value={freqAmount}
-                    onChangeText={setFreqAmount}
+                    onChangeText={(val) => {
+                      setFreqAmount(val);
+                      const amtNum = parseFloat(val.replace(',', '.')) || 0;
+                      const matched = products.find((p) => p.name.toLowerCase().trim() === name.toLowerCase().trim());
+                      if (matched && matched.latest_price && matched.latest_price > 0 && amtNum > 0) {
+                        const autoUnits = amtNum / matched.latest_price;
+                        const formatted = autoUnits >= 1 && Number.isInteger(Math.round(autoUnits * 10) / 10)
+                          ? String(Math.round(autoUnits))
+                          : (Math.round(autoUnits * 10) / 10).toString();
+                        setFreqUnits(formatted);
+                      }
+                    }}
                   />
 
                   {/* Physical Units in Period (Optional - e.g. 12 or 15 milanesas/week) */}
@@ -699,6 +734,34 @@ export default function MonthlyPlanScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  {/* Auto-calc pill suggestion if matchedProduct has latest_price */}
+                  {(() => {
+                    const matched = products.find((p) => p.name.toLowerCase().trim() === name.toLowerCase().trim());
+                    if (matched && matched.latest_price && matched.latest_price > 0 && freqAmountNum > 0) {
+                      const autoUnits = freqAmountNum / matched.latest_price;
+                      const formatted = autoUnits >= 1 && Number.isInteger(Math.round(autoUnits * 10) / 10)
+                        ? String(Math.round(autoUnits))
+                        : (Math.round(autoUnits * 10) / 10).toString();
+                      const unitName = matched.unit || t('plan.unit_units');
+                      return (
+                        <TouchableOpacity
+                          style={styles.autoCalcBadge}
+                          onPress={() => setFreqUnits(formatted)}
+                        >
+                          <Ionicons name="sparkles" size={13} color={colors.primary} />
+                          <Text style={styles.autoCalcBadgeText}>
+                            {t('plan.auto_calc_units_badge', {
+                              units: formatted,
+                              unit: unitName,
+                              price: formatCurrency(matched.latest_price),
+                            })}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   {/* Live Calculation Hint when Units are entered */}
                   {(() => {
@@ -1778,6 +1841,25 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
     flex: 1,
+  },
+  autoCalcBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: `${colors.primary}18`,
+    borderColor: `${colors.primary}40`,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 6,
+    marginBottom: 6,
+    alignSelf: 'flex-start',
+  },
+  autoCalcBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
   },
 });
 

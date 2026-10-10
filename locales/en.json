@@ -254,6 +254,8 @@
     "freq_units_label": "Units / Portions in Period (optional):",
     "freq_units_placeholder": "e.g. 12 or 15 (milanesas/portions)",
     "freq_units_calc_hint": "💡 Estimated cost per unit: {{unitPrice}} • Monthly: ~{{monthlyQty}} units (Total: {{monthlyTotal}})",
+    "auto_calc_units_badge": "Auto: ~{{units}} {{unit}} (based on base price {{price}})",
+    "recalculate_units": "Recalculate from base price",
     "spending_per_period": "(≈ {{amount}}/{{period}})",
     "estimated_unit_price": "Estimated Unit Price",
     "monthly_qty": "Monthly Quantity",
