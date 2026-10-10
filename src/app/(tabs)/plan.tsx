@@ -10,6 +10,8 @@ import {
   Alert,
   ScrollView,
   RefreshControl,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -24,6 +26,7 @@ import {
   syncPlanPricesToProducts,
   generatePurchasesFromMonthlyPlan,
   MonthlyPlanItem,
+  Product,
 } from '../../db/database';
 import { colors } from '../../constants/theme';
 import { t, formatCurrency, formatPercent, getLocale } from '../../i18n';
@@ -31,6 +34,7 @@ import { t, formatCurrency, formatPercent, getLocale } from '../../i18n';
 export default function MonthlyPlanScreen() {
   const router = useRouter();
   const [items, setItems] = useState<MonthlyPlanItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -57,8 +61,12 @@ export default function MonthlyPlanScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const planItems = await getMonthlyPlanItems();
+      const [planItems, prods] = await Promise.all([
+        getMonthlyPlanItems(),
+        getAllProducts(),
+      ]);
       setItems(planItems);
+      setProducts(prods);
     } catch (err) {
       console.error('Error loading monthly plan:', err);
     }
@@ -524,8 +532,16 @@ export default function MonthlyPlanScreen() {
       </View>
 
       {/* Add / Edit Planned Item Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setModalVisible(false); setEditingItem(null); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -536,7 +552,11 @@ export default function MonthlyPlanScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 50 }}
+            >
               {/* Mode Toggle: Frequency vs Standard */}
               <View style={styles.modeTabsRow}>
                 <TouchableOpacity
@@ -559,6 +579,33 @@ export default function MonthlyPlanScreen() {
               </View>
 
               <Text style={styles.inputLabel}>{t('plan.item_name')}</Text>
+              {products.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.prodPicker}>
+                  {products.map((p) => {
+                    const isSelected = name.toLowerCase().trim() === p.name.toLowerCase().trim();
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.prodChip, isSelected && styles.prodChipActive]}
+                        onPress={() => {
+                          setName(p.name);
+                          if (p.unit) {
+                            setUnitDesc(p.unit);
+                          }
+                          if (p.latest_price) {
+                            setFreqAmount(String(p.latest_price));
+                            setUnitPrice(String(p.latest_price));
+                          }
+                        }}
+                      >
+                        <Text style={[styles.prodChipText, isSelected && styles.prodChipTextActive]}>
+                          {p.name}{p.latest_price ? ` (${formatCurrency(p.latest_price)})` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
               <TextInput
                 style={styles.modalInput}
                 placeholder="e.g. Milanesas, Huevos, Banana"
@@ -784,12 +831,20 @@ export default function MonthlyPlanScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Quick Homologator Modal */}
-      <Modal visible={quickCalcModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={quickCalcModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setQuickCalcModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -801,7 +856,11 @@ export default function MonthlyPlanScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 50 }}
+            >
               <Text style={styles.inputLabel}>{t('plan.spent_amount')} ($)</Text>
               <TextInput
                 style={styles.modalInput}
@@ -919,7 +978,7 @@ export default function MonthlyPlanScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1269,7 +1328,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '90%',
+    maxHeight: '85%',
+    flexShrink: 1,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1288,6 +1348,32 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: 6,
     marginTop: 10,
+  },
+  prodPicker: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  prodChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceElevated,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  prodChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  prodChipText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  prodChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   modalInput: {
     backgroundColor: colors.surfaceElevated,

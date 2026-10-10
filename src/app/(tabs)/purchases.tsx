@@ -10,6 +10,8 @@ import {
   Alert,
   ScrollView,
   RefreshControl,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
@@ -20,6 +22,7 @@ import {
   togglePurchaseStatus,
   deletePurchase,
   computeSpendingStats,
+  settleAllPendingPurchases,
   Purchase,
   Product,
 } from '../../db/database';
@@ -106,6 +109,34 @@ export default function PurchasesScreen() {
         },
       },
     ]);
+  };
+
+  const handleSettleAllPending = () => {
+    if (spendingStats.totalOwedPending <= 0) {
+      Alert.alert(t('common.empty_state'), 'No pending purchases to settle.');
+      return;
+    }
+
+    Alert.alert(
+      t('settlement.settle_all'),
+      `${t('settlement.settle_all_confirm')}\n\nTotal: ${formatCurrency(spendingStats.totalOwedPending)} (${spendingStats.purchasesCount} ${t('nav.purchases').toLowerCase()})`,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.confirm'),
+          style: 'default',
+          onPress: async () => {
+            try {
+              await settleAllPendingPurchases(undefined, 'Bank Transfer / MercadoPago');
+              loadData();
+              Alert.alert(t('common.success'), t('settlement.settle_success'));
+            } catch (err) {
+              Alert.alert(t('common.error'), 'Failed to settle purchases');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleAddPurchase = async () => {
@@ -232,6 +263,19 @@ export default function PurchasesScreen() {
             </Text>
           </View>
         </View>
+
+        {spendingStats.totalOwedPending > 0 && (
+          <TouchableOpacity
+            style={styles.settleBannerBtn}
+            activeOpacity={0.8}
+            onPress={handleSettleAllPending}
+          >
+            <Ionicons name="checkmark-done-circle-outline" size={17} color="#FFFFFF" />
+            <Text style={styles.settleBannerBtnText}>
+              {t('settlement.settle_all')}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Spending Averages Grid */}
         <View style={styles.averagesDivider} />
@@ -402,8 +446,16 @@ export default function PurchasesScreen() {
       </TouchableOpacity>
 
       {/* Add Purchase Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('purchases.add_purchase')}</Text>
@@ -412,7 +464,11 @@ export default function PurchasesScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 50 }}
+            >
               <Text style={styles.inputLabel}>{t('purchases.entry_type')}</Text>
               <View style={styles.entryTypeRow}>
                 <TouchableOpacity
@@ -576,11 +632,16 @@ export default function PurchasesScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Custom Days Modal */}
-      <Modal visible={customModalVisible} animationType="fade" transparent>
+      <Modal
+        visible={customModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setCustomModalVisible(false)}
+      >
         <View style={styles.customModalOverlay}>
           <View style={styles.customModalContent}>
             <Text style={styles.customModalTitle}>{t('time_filter.custom_days')}</Text>
@@ -673,6 +734,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  settleBannerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    marginTop: 10,
+    gap: 6,
+  },
+  settleBannerBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   averagesDivider: {
     height: 1,
@@ -901,7 +978,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '90%',
+    maxHeight: '85%',
+    flexShrink: 1,
   },
   modalHeader: {
     flexDirection: 'row',
