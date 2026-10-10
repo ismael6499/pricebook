@@ -835,6 +835,7 @@ export default function MonthlyPlanScreen() {
                       { key: 'L', label: t('plan.unit_l') },
                       { key: 'packs', label: t('plan.unit_packs') },
                       { key: 'bottles', label: t('plan.unit_bottles') },
+                      { key: 'tray20', label: t('plan.unit_tray_20') },
                       { key: 'tray', label: t('plan.unit_tray') },
                       { key: 'dozen', label: t('plan.unit_dozen') },
                       { key: 'custom', label: t('plan.unit_custom') },

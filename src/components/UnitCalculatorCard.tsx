@@ -292,6 +292,7 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
               { label: t('unit_calculator.unit_preset_single'), val: '1' },
               { label: t('unit_calculator.unit_preset_half_dozen'), val: '6' },
               { label: t('unit_calculator.unit_preset_dozen'), val: '12' },
+              { label: t('unit_calculator.unit_preset_tray_20'), val: '20' },
               { label: t('unit_calculator.unit_preset_tray'), val: '30' },
             ].map((p) => (
               <TouchableOpacity
