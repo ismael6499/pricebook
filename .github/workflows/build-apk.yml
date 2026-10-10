@@ -40,22 +40,22 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/PriceBook-v1.0.0.apk
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/PriceBook-v1.0.1.apk
+          TAG_OR_VER="${{ github.event.release.tag_name || 'v1.0.2' }}"
+          cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/PriceBook-${TAG_OR_VER}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/PriceBook-latest.apk"
 
       - name: 📤 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PriceBook-v1.0.1.apk
-          path: android/app/build/outputs/apk/release/PriceBook-v1.0.1.apk
+          name: PriceBook-Release-APK
+          path: android/app/build/outputs/apk/release/app-release.apk
 
       - name: 🚀 Attach APK to GitHub Release
         uses: softprops/action-gh-release@v2
         if: always()
         with:
-          tag_name: ${{ github.event.release.tag_name || 'v1.0.1' }}
+          tag_name: ${{ github.event.release.tag_name || 'v1.0.2' }}
           files: |
-            android/app/build/outputs/apk/release/PriceBook-v1.0.0.apk
-            android/app/build/outputs/apk/release/PriceBook-v1.0.1.apk
+            android/app/build/outputs/apk/release/PriceBook-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
