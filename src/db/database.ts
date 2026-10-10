@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import * as FileSystem from 'expo-file-system/legacy';
 import { INITIAL_SCHEMA, AGUSTIN_SEED_SQL, DB_NAME } from './schema';
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -857,24 +858,45 @@ export async function setSetting(key: string, value: string): Promise<void> {
  */
 export async function exportDatabaseToJson(): Promise<any> {
   const db = await getDatabase();
-  const [categories, products, purchases, settlements, settings] = await Promise.all([
+  const [categories, products, purchases, settlements, settings, monthly_plan_items] = await Promise.all([
     db.getAllAsync('SELECT * FROM categories'),
     db.getAllAsync('SELECT * FROM products'),
     db.getAllAsync('SELECT * FROM purchases'),
     db.getAllAsync('SELECT * FROM settlements'),
     db.getAllAsync('SELECT * FROM app_settings'),
+    db.getAllAsync('SELECT * FROM monthly_plan_items'),
   ]);
+
+  const productsWithImages = await Promise.all(
+    ((products as any[]) || []).map(async (p: any) => {
+      let image_base64: string | null = null;
+      if (p.image_uri) {
+        try {
+          image_base64 = await FileSystem.readAsStringAsync(p.image_uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch (e) {
+          console.warn(`Could not read image for product ${p.id}:`, e);
+        }
+      }
+      return {
+        ...p,
+        image_base64,
+      };
+    })
+  );
 
   return {
     app: 'PriceBook',
-    version: 1,
+    version: 2,
     exported_at: new Date().toISOString(),
     data: {
       categories,
-      products,
+      products: productsWithImages,
       purchases,
       settlements,
       settings,
+      monthly_plan_items,
     },
   };
 }
@@ -887,10 +909,10 @@ export async function restoreDatabaseFromJson(backup: any): Promise<void> {
     throw new Error('Invalid backup file structure');
   }
   const db = await getDatabase();
-  const { categories, products, purchases, settlements, settings } = backup.data;
+  const { categories, products, purchases, settlements, settings, monthly_plan_items } = backup.data;
 
   await db.execAsync('PRAGMA foreign_keys = OFF;');
-  await db.execAsync('DELETE FROM purchases; DELETE FROM products; DELETE FROM categories; DELETE FROM settlements; DELETE FROM app_settings;');
+  await db.execAsync('DELETE FROM purchases; DELETE FROM products; DELETE FROM categories; DELETE FROM settlements; DELETE FROM app_settings; DELETE FROM monthly_plan_items;');
 
   for (const c of categories || []) {
     await db.runAsync('INSERT INTO categories (id, name, color, icon, is_default, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -898,8 +920,20 @@ export async function restoreDatabaseFromJson(backup: any): Promise<void> {
   }
 
   for (const p of products || []) {
+    let finalImageUri = p.image_uri;
+    if (p.image_base64) {
+      try {
+        const dest = `${FileSystem.documentDirectory}product_${p.id || Date.now()}.jpg`;
+        await FileSystem.writeAsStringAsync(dest, p.image_base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        finalImageUri = dest;
+      } catch (e) {
+        console.warn(`Could not write image for product ${p.id}:`, e);
+      }
+    }
     await db.runAsync('INSERT INTO products (id, name, category, unit, image_uri, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      p.id, p.name, p.category, p.unit, p.image_uri, p.notes, p.created_at, p.updated_at);
+      p.id, p.name, p.category, p.unit, finalImageUri, p.notes, p.created_at, p.updated_at);
   }
 
   for (const s of settlements || []) {
@@ -908,12 +942,17 @@ export async function restoreDatabaseFromJson(backup: any): Promise<void> {
   }
 
   for (const pu of purchases || []) {
-    await db.runAsync('INSERT INTO purchases (id, product_id, unit_price, quantity, total_amount, currency, usd_rate, purchase_date, store, buyer, status, settlement_id, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      pu.id, pu.product_id, pu.unit_price, pu.quantity, pu.total_amount, pu.currency, pu.usd_rate, pu.purchase_date, pu.store, pu.buyer, pu.status, pu.settlement_id, pu.notes, pu.created_at);
+    await db.runAsync('INSERT INTO purchases (id, product_id, unit_price, quantity, total_amount, currency, usd_rate, purchase_date, store, buyer, status, settlement_id, entry_type, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      pu.id, pu.product_id, pu.unit_price, pu.quantity, pu.total_amount, pu.currency, pu.usd_rate, pu.purchase_date, pu.store, pu.buyer, pu.status, pu.settlement_id, pu.entry_type || 'purchase', pu.notes, pu.created_at);
   }
 
   for (const st of settings || []) {
     await db.runAsync('INSERT INTO app_settings (key, value) VALUES (?, ?)', st.key, st.value);
+  }
+
+  for (const m of monthly_plan_items || []) {
+    await db.runAsync('INSERT INTO monthly_plan_items (id, name, category, unit_desc, estimated_unit_price, estimated_monthly_qty, estimated_monthly_total, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      m.id, m.name, m.category, m.unit_desc, m.estimated_unit_price, m.estimated_monthly_qty, m.estimated_monthly_total, m.notes, m.created_at);
   }
 
   await db.execAsync('PRAGMA foreign_keys = ON;');
