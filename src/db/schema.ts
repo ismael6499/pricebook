@@ -119,31 +119,4 @@ INSERT OR IGNORE INTO monthly_plan_items (id, name, category, unit_desc, estimat
   (5, 'Coffee', 'Groceries', '2 bags / month', 6500.0, 2, 13000.0, 'Monthly coffee beans');
 `;
 
-export const AGUSTIN_SEED_SQL = `
--- Seed Agustín's actual products
-INSERT OR IGNORE INTO products (id, name, category, unit, notes) VALUES
-  (1, 'Huevos', 'Groceries', '248 units / month', '$7.000 cada 20 huevos'),
-  (2, 'Agua (Botellas)', 'Groceries', '93 bottles / month', '$2.500 c/u botella x 93 u'),
-  (3, 'Milanesas', 'Meat & Fish', '1 portion / day', '$5.000 x día'),
-  (4, 'Queso', 'Dairy', '4 weeks / month', '$15.000 - $17.500 x semana'),
-  (5, 'Manzanas', 'Groceries', '3d/wk (2/day)', '2 x día ($2.000 x día)'),
-  (6, 'Banana', 'Groceries', '4d/wk (2/day)', '2 bananas x día'),
-  (7, 'Brócoli', 'Groceries', '8 packs / month', '$7.000 - $7.500 x paquete'),
-  (8, 'Espinaca', 'Groceries', '8 packs / month', '$5.000 x paquete'),
-  (9, 'Lentejas', 'Groceries', '4 weeks / month', '$6.000 x semana'),
-  (10, 'Aceite', 'Groceries', '1 bottle / month', '$15.000 x mes'),
-  (11, 'Citric Jugo de Naranja', 'Groceries', '1 L', '$5.000 c/u');
-
--- Seed Agustín's monthly plan items
-INSERT OR IGNORE INTO monthly_plan_items (id, name, category, unit_desc, estimated_unit_price, estimated_monthly_qty, estimated_monthly_total, notes) VALUES
-  (1, 'Milanesas', 'Meat & Fish', '1 portion / day', 5000.0, 31, 155000.0, '$5.000 x día'),
-  (2, 'Brócoli', 'Groceries', '8 packs / month', 7500.0, 8, 60000.0, '$7.000 - $7.500 x paquete'),
-  (3, 'Espinaca', 'Groceries', '8 packs / month', 5000.0, 8, 40000.0, '$5.000 x paquete'),
-  (4, 'Huevos', 'Groceries', '248 units / month', 362.9, 248, 90000.0, '$7.000 cada 20 huevos'),
-  (5, 'Queso', 'Dairy', '4 weeks / month', 17500.0, 4, 70000.0, '$15.000 - $17.500 x semana'),
-  (6, 'Lentejas', 'Groceries', '4 weeks / month', 6250.0, 4, 25000.0, '$6.000 x semana'),
-  (7, 'Manzanas', 'Groceries', '3d/wk (2/day)', 1000.0, 26, 26000.0, '2 x día ($2.000 x día)'),
-  (8, 'Banana', 'Groceries', '4d/wk (2/day)', 1000.0, 34.67, 34670.0, '2 bananas x día'),
-  (9, 'Agua (Botellas)', 'Groceries', '93 bottles / month', 2500.0, 93, 232500.0, '$2.500 c/u botella x 93 u'),
-  (10, 'Aceite', 'Groceries', '1 bottle / month', 15000.0, 1, 15000.0, '$15.000 x mes');
-`;
+export const AGUSTIN_SEED_SQL = SAMPLE_SEED_SQL;

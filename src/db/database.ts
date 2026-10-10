@@ -133,8 +133,7 @@ export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
 }
 
 /**
- * Loads Agustín's personal template ($850.000 September settlement + 11 habitual items).
- * Kept separate so public releases can remain empty and customized per device.
+ * Loads generic demonstration sample template.
  */
 export async function seedAgustinPersonalData(): Promise<void> {
   const db = await getDatabase();
@@ -773,16 +772,21 @@ export async function getMonthlySummary(monthPeriod?: string): Promise<MonthlySu
 }
 
 export async function settleAllPendingPurchases(
-  period: string,
+  period?: string,
   paymentMethod: string = 'Transfer',
   notes: string = ''
 ): Promise<{ settlementId: number; amountSettled: number; count: number }> {
   const db = await getDatabase();
 
-  const pendingRows = await db.getAllAsync<{ id: number; total_amount: number }>(
-    `SELECT id, total_amount FROM purchases WHERE status = 'pending' AND purchase_date LIKE ?`,
-    `${period}%`
-  );
+  const now = new Date();
+  const effectivePeriod = period || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const query = period
+    ? `SELECT id, total_amount FROM purchases WHERE status = 'pending' AND purchase_date LIKE ? AND entry_type != 'reference'`
+    : `SELECT id, total_amount FROM purchases WHERE status = 'pending' AND entry_type != 'reference'`;
+  const params = period ? [`${period}%`] : [];
+
+  const pendingRows = await db.getAllAsync<{ id: number; total_amount: number }>(query, ...params);
 
   if (pendingRows.length === 0) {
     return { settlementId: 0, amountSettled: 0, count: 0 };
@@ -794,7 +798,7 @@ export async function settleAllPendingPurchases(
   const res = await db.runAsync(
     `INSERT INTO settlements (period, total_settled, purchases_count, payment_method, notes)
      VALUES (?, ?, ?, ?, ?)`,
-    period,
+    effectivePeriod,
     totalAmount,
     pendingRows.length,
     paymentMethod,
@@ -803,14 +807,13 @@ export async function settleAllPendingPurchases(
 
   const settlementId = res.lastInsertRowId;
 
-  // Mark all pending purchases for this period as settled
-  await db.runAsync(
-    `UPDATE purchases 
-     SET status = 'settled', settlement_id = ?
-     WHERE status = 'pending' AND purchase_date LIKE ?`,
-    settlementId,
-    `${period}%`
-  );
+  // Mark pending purchases as settled
+  const updateQuery = period
+    ? `UPDATE purchases SET status = 'settled', settlement_id = ? WHERE status = 'pending' AND purchase_date LIKE ? AND entry_type != 'reference'`
+    : `UPDATE purchases SET status = 'settled', settlement_id = ? WHERE status = 'pending' AND entry_type != 'reference'`;
+  const updateParams = period ? [settlementId, `${period}%`] : [settlementId];
+
+  await db.runAsync(updateQuery, ...updateParams);
 
   return {
     settlementId,
