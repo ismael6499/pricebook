@@ -4,11 +4,25 @@ import { colors } from '../constants/theme';
 import { t, formatCurrency } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 
-interface UnitCalculatorCardProps {
+export interface CalculationResult {
   unitPrice: number;
+  quantity: number;
+  totalAmount: number;
+  notes?: string;
+  sourceDesc?: string;
 }
 
-export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProps) {
+interface UnitCalculatorCardProps {
+  unitPrice: number;
+  onCalculationChange?: (result: CalculationResult) => void;
+  onRecordPurchase?: (result: CalculationResult) => void;
+}
+
+export default function UnitCalculatorCard({
+  unitPrice,
+  onCalculationChange,
+  onRecordPurchase,
+}: UnitCalculatorCardProps) {
   const [activeTab, setActiveTab] = useState<'frequency' | 'weight' | 'volume'>('frequency');
 
   // Amount input (defaults to unitPrice if positive, but user can freely change)
@@ -109,6 +123,78 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
   const costPer100ml = totalVolumeMl > 0 ? (parsedAmount / totalVolumeMl) * 100 : 0;
   const costPerLiter = totalVolumeMl > 0 ? (parsedAmount / totalVolumeMl) * 1000 : 0;
   const costPerVolumeUnit = volumeUnitsNum > 1 ? parsedAmount / volumeUnitsNum : 0;
+
+  // --- Calculation Result for Purchases & Records ---
+  const currentCalculation = React.useMemo<CalculationResult>(() => {
+    if (activeTab === 'weight') {
+      if (unitsNum > 1) {
+        const uPrice = Number((parsedAmount / unitsNum).toFixed(2));
+        return {
+          unitPrice: uPrice,
+          quantity: unitsNum,
+          totalAmount: parsedAmount,
+          notes: `${unitsNum} u pack (${formatCurrency(parsedAmount)})`,
+          sourceDesc: `${unitsNum} u @ ${formatCurrency(uPrice)}/u`,
+        };
+      }
+      if (gramsNum > 0) {
+        const costKg = Number(((parsedAmount / gramsNum) * 1000).toFixed(2));
+        const qtyKg = Number((gramsNum / 1000).toFixed(3));
+        return {
+          unitPrice: costKg,
+          quantity: qtyKg,
+          totalAmount: parsedAmount,
+          notes: `${gramsNum} g (${formatCurrency(parsedAmount)})`,
+          sourceDesc: `${gramsNum}g @ ${formatCurrency(costKg)}/kg`,
+        };
+      }
+    } else if (activeTab === 'volume') {
+      if (volumeUnitsNum > 1) {
+        const uPrice = Number((parsedAmount / volumeUnitsNum).toFixed(2));
+        return {
+          unitPrice: uPrice,
+          quantity: volumeUnitsNum,
+          totalAmount: parsedAmount,
+          notes: `${volumeUnitsNum} pack x ${volumeNum}ml (${formatCurrency(parsedAmount)})`,
+          sourceDesc: `${volumeUnitsNum} u @ ${formatCurrency(uPrice)}/u`,
+        };
+      }
+      if (volumeNum > 0 && volumeNum !== 1000) {
+        const costLiter = Number(((parsedAmount / volumeNum) * 1000).toFixed(2));
+        const qtyLiter = Number((volumeNum / 1000).toFixed(3));
+        return {
+          unitPrice: costLiter,
+          quantity: qtyLiter,
+          totalAmount: parsedAmount,
+          notes: `${volumeNum} ml (${formatCurrency(parsedAmount)})`,
+          sourceDesc: `${volumeNum}ml @ ${formatCurrency(costLiter)}/L`,
+        };
+      }
+    } else if (activeTab === 'frequency') {
+      if (freqUnitsNum > 0) {
+        const uPrice = Number((parsedAmount / freqUnitsNum).toFixed(2));
+        return {
+          unitPrice: uPrice,
+          quantity: freqUnitsNum,
+          totalAmount: parsedAmount,
+          notes: `${freqUnitsNum} u / ${basis} (${formatCurrency(parsedAmount)})`,
+          sourceDesc: `${freqUnitsNum} u @ ${formatCurrency(uPrice)}/u`,
+        };
+      }
+    }
+
+    return {
+      unitPrice: parsedAmount,
+      quantity: 1,
+      totalAmount: parsedAmount,
+      notes: undefined,
+      sourceDesc: `1 u @ ${formatCurrency(parsedAmount)}`,
+    };
+  }, [activeTab, parsedAmount, unitsNum, gramsNum, volumeUnitsNum, volumeNum, freqUnitsNum, basis]);
+
+  React.useEffect(() => {
+    onCalculationChange?.(currentCalculation);
+  }, [currentCalculation, onCalculationChange]);
 
   return (
     <View style={styles.card}>
@@ -482,11 +568,45 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
           </View>
         </View>
       )}
+
+      {/* Quick Action to Record this exact calculation */}
+      {currentCalculation &&
+        (currentCalculation.quantity > 1 || (currentCalculation.unitPrice > 0 && currentCalculation.unitPrice !== unitPrice)) &&
+        onRecordPurchase && (
+          <TouchableOpacity
+            style={styles.applyCalcBtn}
+            activeOpacity={0.8}
+            onPress={() => onRecordPurchase(currentCalculation)}
+          >
+            <Ionicons name="cart-outline" size={17} color="#FFFFFF" />
+            <Text style={styles.applyCalcBtnText}>
+              {t('purchases.record_with_values', {
+                price: formatCurrency(currentCalculation.unitPrice),
+                qty: currentCalculation.quantity,
+              })}
+            </Text>
+          </TouchableOpacity>
+        )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  applyCalcBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 14,
+    gap: 8,
+  },
+  applyCalcBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 16,

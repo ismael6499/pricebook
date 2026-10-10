@@ -138,6 +138,8 @@
     "select_product": "Seleccionar un producto",
     "unit_price": "Precio Unitario",
     "quantity": "Cantidad",
+    "record_with_values": "Registrar {{qty}} u a {{price}}",
+    "total_amount_preview": "Total: {{total}}",
     "total_cost": "Costo Total",
     "date_time": "Fecha y Hora",
     "store": "Comercio / Supermercado",

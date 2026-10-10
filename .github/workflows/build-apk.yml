@@ -40,7 +40,7 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --no-daemon
-          TAG_OR_VER="${{ github.event.release.tag_name || 'v1.0.3' }}"
+          TAG_OR_VER="${{ github.event.release.tag_name || 'v1.0.4' }}"
           cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/PriceBook-${TAG_OR_VER}.apk"
           cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/PriceBook-latest.apk"
 
@@ -54,7 +54,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: always()
         with:
-          tag_name: ${{ github.event.release.tag_name || 'v1.0.3' }}
+          tag_name: ${{ github.event.release.tag_name || 'v1.0.4' }}
           files: |
             android/app/build/outputs/apk/release/PriceBook-*.apk
         env:

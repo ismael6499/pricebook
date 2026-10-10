@@ -138,6 +138,8 @@
     "select_product": "Select a product",
     "unit_price": "Unit Price",
     "quantity": "Quantity",
+    "record_with_values": "Record {{qty}} units @ {{price}}",
+    "total_amount_preview": "Total: {{total}}",
     "total_cost": "Total Cost",
     "date_time": "Date & Time",
     "store": "Store / Supermarket",

@@ -11,6 +11,8 @@ import {
   TextInput,
   Dimensions,
   RefreshControl,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +31,7 @@ import {
 } from '../../db/database';
 import { fetchUsdBlueRate } from '../../services/dollar';
 import PhotoPickerModal from '../../components/PhotoPickerModal';
-import UnitCalculatorCard from '../../components/UnitCalculatorCard';
+import UnitCalculatorCard, { CalculationResult } from '../../components/UnitCalculatorCard';
 import { colors } from '../../constants/theme';
 import { t, formatCurrency, formatPercent, formatDateTime } from '../../i18n';
 
@@ -47,6 +49,7 @@ export default function ProductDetailScreen() {
   const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [calcResult, setCalcResult] = useState<CalculationResult | null>(null);
 
   // Edit product details state
   const [editProductModalVisible, setEditProductModalVisible] = useState(false);
@@ -145,13 +148,20 @@ export default function ProductDetailScreen() {
     }
   };
 
-  const handleOpenAddPurchase = () => {
+  const handleOpenAddPurchase = (fromCalc?: CalculationResult) => {
     setEditingPurchase(null);
-    setUnitPrice(product?.latest_price ? String(product.latest_price) : '');
-    setQuantity('1');
+    const activeCalc = fromCalc || calcResult;
+    if (activeCalc && activeCalc.quantity > 0 && activeCalc.unitPrice > 0) {
+      setUnitPrice(String(activeCalc.unitPrice));
+      setQuantity(String(activeCalc.quantity));
+      setNotes(activeCalc.notes || '');
+    } else {
+      setUnitPrice(product?.latest_price ? String(product.latest_price) : '');
+      setQuantity('1');
+      setNotes('');
+    }
     setStore('');
     setBuyer('Parents');
-    setNotes('');
     setEntryType('purchase');
     setStatus('pending');
     setPurchaseModalVisible(true);
@@ -454,16 +464,24 @@ export default function ProductDetailScreen() {
       </View>
 
       {/* Unit & Frequency Breakdown Calculator */}
-      <UnitCalculatorCard unitPrice={product.latest_price || 0} />
+      <UnitCalculatorCard
+        unitPrice={product.latest_price || 0}
+        onCalculationChange={setCalcResult}
+        onRecordPurchase={(calc) => handleOpenAddPurchase(calc)}
+      />
 
       {/* Action Button: Record New Purchase / Price Check */}
       <TouchableOpacity
         style={styles.recordBtn}
         activeOpacity={0.8}
-        onPress={handleOpenAddPurchase}
+        onPress={() => handleOpenAddPurchase(calcResult || undefined)}
       >
         <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-        <Text style={styles.recordBtnText}>{t('purchases.add_purchase')}</Text>
+        <Text style={styles.recordBtnText}>
+          {calcResult && (calcResult.quantity > 1 || (calcResult.unitPrice > 0 && calcResult.unitPrice !== (product.latest_price || 0)))
+            ? `${t('purchases.add_purchase')} (${formatCurrency(calcResult.unitPrice)} x ${calcResult.quantity})`
+            : t('purchases.add_purchase')}
+        </Text>
       </TouchableOpacity>
 
       {/* Price & Purchase History */}
@@ -557,8 +575,17 @@ export default function ProductDetailScreen() {
       </View>
 
       {/* Record / Edit Purchase Modal */}
-      <Modal visible={purchaseModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={purchaseModalVisible}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => { setPurchaseModalVisible(false); setEditingPurchase(null); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -569,7 +596,22 @@ export default function ProductDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 60 }}
+            >
+              {/* Calculated Total Live Preview */}
+              <View style={styles.totalPreviewBox}>
+                <Text style={styles.totalPreviewLabel}>{t('purchases.total_cost')}</Text>
+                <Text style={styles.totalPreviewValue}>
+                  {formatCurrency(
+                    (parseFloat(unitPrice.replace(',', '.')) || 0) *
+                    (parseFloat(quantity.replace(',', '.')) || 1)
+                  )}
+                </Text>
+              </View>
+
               <Text style={styles.inputLabel}>{t('purchases.entry_type')}</Text>
               <View style={styles.entryTypeToggleRow}>
                 <TouchableOpacity
@@ -692,12 +734,21 @@ export default function ProductDetailScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit Product Details Modal */}
-      <Modal visible={editProductModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={editProductModalVisible}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setEditProductModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('products.edit_product')}</Text>
@@ -706,7 +757,11 @@ export default function ProductDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 60 }}
+            >
               <Text style={styles.inputLabel}>{t('products.name')}</Text>
               <TextInput
                 style={styles.modalInput}
@@ -767,7 +822,7 @@ export default function ProductDetailScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Fullscreen Photo Viewer Modal */}
@@ -1090,7 +1145,30 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '90%',
+    maxHeight: '85%',
+    flexShrink: 1,
+  },
+  totalPreviewBox: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  totalPreviewLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  totalPreviewValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.primary,
   },
   modalHeader: {
     flexDirection: 'row',
