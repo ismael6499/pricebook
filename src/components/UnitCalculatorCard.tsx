@@ -286,6 +286,26 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
             </View>
           </View>
 
+          {/* Quick Unit Presets for Eggs & Packs */}
+          <View style={styles.unitPresetsRow}>
+            {[
+              { label: t('unit_calculator.unit_preset_single'), val: '1' },
+              { label: t('unit_calculator.unit_preset_half_dozen'), val: '6' },
+              { label: t('unit_calculator.unit_preset_dozen'), val: '12' },
+              { label: t('unit_calculator.unit_preset_tray'), val: '30' },
+            ].map((p) => (
+              <TouchableOpacity
+                key={p.val}
+                style={[styles.unitPresetChip, packageUnits === p.val && styles.unitPresetChipActive]}
+                onPress={() => setPackageUnits(p.val)}
+              >
+                <Text style={[styles.unitPresetChipText, packageUnits === p.val && styles.unitPresetChipTextActive]}>
+                  {p.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Results Grid */}
           <View style={styles.metricsGrid}>
             <View style={styles.metricBox}>
@@ -518,6 +538,34 @@ const styles = StyleSheet.create({
   },
   inputCol: {
     flex: 1,
+  },
+  unitPresetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  unitPresetChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  unitPresetChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+  },
+  unitPresetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  unitPresetChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
   },
   input: {
     backgroundColor: colors.surfaceElevated,

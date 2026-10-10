@@ -15,20 +15,26 @@ if not exist "%~dp0android" (
   call npx expo prebuild --platform android --no-install
 )
 
-cd /d "%~dp0android"
+subst P: /d >nul 2>&1
+subst P: "%~dp0."
+
+cd /d "P:\android"
 echo [*] Compilando APK Release solo para ARM64 con cache...
 call gradlew.bat assembleRelease "-PreactNativeArchitectures=arm64-v8a" --build-cache --parallel
+set BUILD_ERR=%ERRORLEVEL%
 
-if %ERRORLEVEL% EQU 0 (
+if %BUILD_ERR% EQU 0 (
   echo.
   echo [OK] Compilacion exitosa. Copiando a Mobile Drop...
-  copy /y "%~dp0android\app\build\outputs\apk\release\app-release.apk" "C:\Users\agust\Documents\Mobile Drop\PriceBook-latest.apk" >nul
-  copy /y "%~dp0android\app\build\outputs\apk\release\app-release.apk" "C:\Users\agust\Documents\Mobile Drop\PriceBook-v1.0.1.apk" >nul
-  echo [OK] APK copiado en: C:\Users\agust\Documents\Mobile Drop\PriceBook-v1.0.1.apk
+  copy /y "P:\android\app\build\outputs\apk\release\app-release.apk" "C:\Users\agust\Documents\Mobile Drop\PriceBook-latest.apk" >nul
+  copy /y "P:\android\app\build\outputs\apk\release\app-release.apk" "C:\Users\agust\Documents\Mobile Drop\PriceBook-v1.0.2.apk" >nul
+  echo [OK] APK copiado en: C:\Users\agust\Documents\Mobile Drop\PriceBook-v1.0.2.apk
 ) else (
   echo.
   echo [ERROR] Fallo la compilacion. Revisa los logs arriba.
 )
+
+subst P: /d >nul 2>&1
 
 echo.
 pause

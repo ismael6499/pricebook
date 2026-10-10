@@ -50,6 +50,7 @@ export default function MonthlyPlanScreen() {
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Wed', 'Fri']);
   const [qtyPerDay, setQtyPerDay] = useState('2');
   const [unitDesc, setUnitDesc] = useState('');
+  const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [unitPrice, setUnitPrice] = useState('');
   const [monthlyQty, setMonthlyQty] = useState('1');
   const [notes, setNotes] = useState('');
@@ -401,6 +402,26 @@ export default function MonthlyPlanScreen() {
     );
   }, [items, totalBudget, loadData, router]);
 
+  const resolvePlanUnitLabel = (item: MonthlyPlanItem): string => {
+    const desc = (item.unit_desc || '').toLowerCase();
+    if (desc.includes('/wk') || desc.includes('/sem') || desc.includes('week') || desc.includes('seman')) {
+      return t('plan.unit_weeks');
+    }
+    if (desc.includes('/day') || desc.includes('/día') || desc.includes('/dia') || desc.includes('day') || desc.includes('día')) {
+      return t('plan.unit_days');
+    }
+    if (desc.includes('15d') || desc.includes('biweek') || desc.includes('quincen')) {
+      return t('plan.unit_fortnights');
+    }
+    if (desc.includes('/mo') || desc.includes('/mes') || desc.includes('month') || desc.includes('mes')) {
+      return t('plan.unit_months');
+    }
+    if (item.unit_desc && item.unit_desc.trim()) {
+      return item.unit_desc.trim();
+    }
+    return t('plan.unit_units');
+  };
+
   const renderItem = ({ item }: { item: MonthlyPlanItem }) => {
     const hasRealPrice = item.current_real_price !== undefined;
     const isHigher = (item.variation_vs_estimate || 0) > 0;
@@ -413,14 +434,14 @@ export default function MonthlyPlanScreen() {
             {item.unit_desc ? <Text style={styles.itemUnit}>{item.unit_desc}</Text> : null}
           </View>
           <View style={styles.totalBadge}>
-            <Text style={styles.totalBadgeLabel}>Monthly Total</Text>
+            <Text style={styles.totalBadgeLabel}>{t('plan.monthly_total')}</Text>
             <Text style={styles.totalBadgeAmount}>{formatCurrency(item.estimated_monthly_total)}</Text>
           </View>
         </View>
 
         <View style={styles.detailRow}>
           <Text style={styles.formulaText}>
-            Est: {formatCurrency(item.estimated_unit_price)} × {item.estimated_monthly_qty}
+            Est: {formatCurrency(item.estimated_unit_price)} × {item.estimated_monthly_qty} {resolvePlanUnitLabel(item)}
           </Text>
           <View style={styles.actionButtons}>
             <TouchableOpacity
@@ -428,7 +449,7 @@ export default function MonthlyPlanScreen() {
               onPress={() => handleQuickPurchase(item)}
             >
               <Ionicons name="cart-outline" size={14} color={colors.primary} />
-              <Text style={styles.quickRecordText}>View Product</Text>
+              <Text style={styles.quickRecordText}>{t('products.product_details')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => handleEditItem(item)} style={{ paddingHorizontal: 6 }}>
               <Ionicons name="pencil-outline" size={16} color={colors.primary} />
@@ -442,7 +463,7 @@ export default function MonthlyPlanScreen() {
         {hasRealPrice && (
           <View style={styles.realVsPlanRow}>
             <Text style={styles.realVsPlanLabel}>
-              Latest real purchase: <Text style={styles.realPriceVal}>{formatCurrency(item.current_real_price!)}</Text>
+              {t('plan.real_vs_plan')}: <Text style={styles.realPriceVal}>{formatCurrency(item.current_real_price!)}</Text>
             </Text>
             {item.variation_vs_estimate !== 0 && (
               <View style={[styles.varBadge, isHigher ? styles.varBadgeDanger : styles.varBadgeSuccess]}>
@@ -626,6 +647,26 @@ export default function MonthlyPlanScreen() {
                     onChangeText={setFreqAmount}
                   />
 
+                  {(() => {
+                    const matchedProduct = products.find((p) => p.name.toLowerCase().trim() === name.toLowerCase().trim());
+                    if (matchedProduct && matchedProduct.latest_price && matchedProduct.latest_price > 0 && freqAmountNum > 0) {
+                      const unitsPerWeek = (freqAmountNum / matchedProduct.latest_price).toFixed(1);
+                      const unitsPerMonth = ((freqAmountNum / matchedProduct.latest_price) * (52 / 12)).toFixed(1);
+                      return (
+                        <View style={styles.freqUnitsHintBox}>
+                          <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+                          <Text style={styles.freqUnitsHintText}>
+                            {t('plan.weekly_units_hint', {
+                              units: unitsPerWeek,
+                              monthly: unitsPerMonth,
+                            })}
+                          </Text>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   <Text style={styles.inputLabel}>{t('plan.freq_label')}</Text>
                   <View style={styles.freqChipsRow}>
                     <TouchableOpacity
@@ -785,14 +826,49 @@ export default function MonthlyPlanScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={styles.inputLabel}>{t('plan.unit_desc')}</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="e.g. 1 x día, 8 paq / mes, 4 semanas"
-                    placeholderTextColor={colors.textMuted}
-                    value={unitDesc}
-                    onChangeText={setUnitDesc}
-                  />
+                  <Text style={styles.inputLabel}>{t('plan.unit_measure_label')}</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.unitChipScrollView}>
+                    {[
+                      { key: 'units', label: t('plan.unit_units') },
+                      { key: 'kg', label: t('plan.unit_kg') },
+                      { key: 'g', label: t('plan.unit_g') },
+                      { key: 'L', label: t('plan.unit_l') },
+                      { key: 'packs', label: t('plan.unit_packs') },
+                      { key: 'bottles', label: t('plan.unit_bottles') },
+                      { key: 'tray', label: t('plan.unit_tray') },
+                      { key: 'dozen', label: t('plan.unit_dozen') },
+                      { key: 'custom', label: t('plan.unit_custom') },
+                    ].map((u) => {
+                      const isActive = (unitDesc.toLowerCase().trim() === u.label.toLowerCase().trim()) || (u.key === 'custom' && isCustomUnit);
+                      return (
+                        <TouchableOpacity
+                          key={u.key}
+                          style={[styles.unitChip, isActive && styles.unitChipActive]}
+                          onPress={() => {
+                            if (u.key === 'custom') {
+                              setIsCustomUnit(true);
+                            } else {
+                              setIsCustomUnit(false);
+                              setUnitDesc(u.label);
+                            }
+                          }}
+                        >
+                          <Text style={[styles.unitChipText, isActive && styles.unitChipTextActive]}>
+                            {u.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                  {isCustomUnit && (
+                    <TextInput
+                      style={[styles.modalInput, { marginTop: 4, marginBottom: 8 }]}
+                      placeholder={t('plan.unit_desc_placeholder')}
+                      placeholderTextColor={colors.textMuted}
+                      value={unitDesc}
+                      onChangeText={setUnitDesc}
+                    />
+                  )}
 
                   <Text style={styles.inputLabel}>{t('plan.estimated_unit_price')} ($)</Text>
                   <TextInput
@@ -805,14 +881,62 @@ export default function MonthlyPlanScreen() {
                   />
 
                   <Text style={styles.inputLabel}>{t('plan.monthly_qty')}</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="e.g. 31, 8, 4"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    value={monthlyQty}
-                    onChangeText={setMonthlyQty}
-                  />
+                  <View style={styles.qtyStepperRow}>
+                    <TouchableOpacity
+                      style={styles.stepperBtn}
+                      onPress={() => {
+                        const cur = Math.max(1, (parseFloat(monthlyQty.replace(',', '.')) || 1) - 1);
+                        setMonthlyQty(String(cur));
+                      }}
+                    >
+                      <Ionicons name="remove" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                    <TextInput
+                      style={styles.qtyStepperInput}
+                      placeholder="1"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="numeric"
+                      value={monthlyQty}
+                      onChangeText={setMonthlyQty}
+                    />
+                    <TouchableOpacity
+                      style={styles.stepperBtn}
+                      onPress={() => {
+                        const cur = (parseFloat(monthlyQty.replace(',', '.')) || 0) + 1;
+                        setMonthlyQty(String(cur));
+                      }}
+                    >
+                      <Ionicons name="add" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Quantity quick preset chips */}
+                  <View style={styles.qtyPresetsRow}>
+                    {['1', '2', '4', '8', '12', '24', '30'].map((q) => (
+                      <TouchableOpacity
+                        key={q}
+                        style={[styles.qtyPresetChip, monthlyQty === q && styles.qtyPresetChipActive]}
+                        onPress={() => setMonthlyQty(q)}
+                      >
+                        <Text style={[styles.qtyPresetChipText, monthlyQty === q && styles.qtyPresetChipTextActive]}>
+                          {q}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Live Total Calculation Card */}
+                  <View style={styles.standardCalcCard}>
+                    <Text style={styles.standardCalcLabel}>{t('plan.monthly_total')}</Text>
+                    <Text style={styles.standardCalcTotal}>
+                      {formatCurrency(
+                        (parseFloat(unitPrice.replace(',', '.')) || 0) * (parseFloat(monthlyQty.replace(',', '.')) || 0)
+                      )}
+                    </Text>
+                    <Text style={styles.standardCalcFormula}>
+                      {monthlyQty || '0'} {unitDesc || t('plan.unit_units')} × {formatCurrency(parseFloat(unitPrice.replace(',', '.')) || 0)}
+                    </Text>
+                  </View>
                 </>
               )}
 
@@ -1468,6 +1592,129 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
     marginTop: 6,
+  },
+  unitChipScrollView: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  unitChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceElevated,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  unitChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  unitChipText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  unitChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  qtyStepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  stepperBtn: {
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyStepperInput: {
+    flex: 1,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: colors.border,
+    textAlign: 'center',
+  },
+  qtyPresetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  qtyPresetChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  qtyPresetChipActive: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderColor: colors.primary,
+  },
+  qtyPresetChipText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  qtyPresetChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  standardCalcCard: {
+    backgroundColor: colors.surfaceElevated,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 10,
+  },
+  standardCalcLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  standardCalcTotal: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.warning,
+    marginVertical: 2,
+  },
+  standardCalcFormula: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  freqUnitsHintBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 8,
+    padding: 8,
+    gap: 6,
+    marginTop: 6,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.25)',
+  },
+  freqUnitsHintText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+    flex: 1,
   },
 });
 
