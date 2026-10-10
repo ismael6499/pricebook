@@ -45,6 +45,7 @@ export default function MonthlyPlanScreen() {
   const [name, setName] = useState('');
   const [calcMode, setCalcMode] = useState<'frequency' | 'standard'>('frequency');
   const [freqAmount, setFreqAmount] = useState('15000');
+  const [freqUnits, setFreqUnits] = useState('');
   const [freqType, setFreqType] = useState<'weekly' | 'daily' | 'biweekly' | 'monthly' | 'custom' | 'alternating'>('weekly');
   const [freqCustomDays, setFreqCustomDays] = useState('3');
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Wed', 'Fri']);
@@ -197,6 +198,7 @@ export default function MonthlyPlanScreen() {
     setUnitPrice('');
     setMonthlyQty('1');
     setFreqAmount('15000');
+    setFreqUnits('');
     setQtyPerDay('2');
     setSelectedDays(['Mon', 'Wed', 'Fri']);
     setNotes('');
@@ -212,6 +214,7 @@ export default function MonthlyPlanScreen() {
     setUnitPrice(String(item.estimated_unit_price));
     setMonthlyQty(String(item.estimated_monthly_qty));
     setFreqAmount(String(item.estimated_unit_price));
+    setFreqUnits('');
     setNotes(item.notes || '');
     setCalcMode('standard');
     setModalVisible(true);
@@ -235,29 +238,50 @@ export default function MonthlyPlanScreen() {
           return;
         }
 
-        finalUnitPrice = freqAmountNum;
+        const freqUnitsNum = parseFloat(freqUnits.replace(',', '.')) || 0;
+        let periodMultiplier = 4.33;
+        let periodDesc = isEn ? 'wk' : 'sem';
 
         if (freqType === 'weekly') {
-          finalUnitDesc = isEn ? `1/wk (${formatCurrency(freqAmountNum)})` : `1/sem (${formatCurrency(freqAmountNum)})`;
-          finalQty = 4.33;
+          periodMultiplier = 4.33;
+          periodDesc = isEn ? 'wk' : 'sem';
         } else if (freqType === 'daily') {
-          finalUnitDesc = isEn ? `1/day (${formatCurrency(freqAmountNum)})` : `1/día (${formatCurrency(freqAmountNum)})`;
-          finalQty = 30.4;
+          periodMultiplier = 30.4;
+          periodDesc = isEn ? 'day' : 'día';
         } else if (freqType === 'biweekly') {
-          finalUnitDesc = isEn ? `every 15d (${formatCurrency(freqAmountNum)})` : `c/15d (${formatCurrency(freqAmountNum)})`;
-          finalQty = 2.17;
+          periodMultiplier = 2.17;
+          periodDesc = isEn ? '15d' : '15d';
         } else if (freqType === 'monthly') {
-          finalUnitDesc = isEn ? `1/mo (${formatCurrency(freqAmountNum)})` : `1/mes (${formatCurrency(freqAmountNum)})`;
-          finalQty = 1;
+          periodMultiplier = 1;
+          periodDesc = isEn ? 'mo' : 'mes';
         } else if (freqType === 'custom') {
           const days = parseFloat(freqCustomDays) || 1;
-          finalUnitDesc = isEn ? `every ${days}d (${formatCurrency(freqAmountNum)})` : `c/${days}d (${formatCurrency(freqAmountNum)})`;
-          finalQty = Number((30.4167 / days).toFixed(2));
+          periodMultiplier = Number((30.4167 / days).toFixed(2));
+          periodDesc = `${days}d`;
         } else if (freqType === 'alternating') {
           const daysCount = selectedDays.length > 0 ? selectedDays.length : 1;
           const dailyQty = parseFloat(qtyPerDay.replace(',', '.')) || 1;
           finalUnitDesc = isEn ? `${daysCount}d/wk (${dailyQty}/day)` : `${daysCount}d/sem (${dailyQty}/día)`;
           finalQty = Number(((daysCount * dailyQty) * (52 / 12)).toFixed(2));
+          finalUnitPrice = freqAmountNum;
+        }
+
+        if (freqType !== 'alternating') {
+          if (freqUnitsNum > 0) {
+            // Physical units specified by user (e.g. 12 or 15 milanesas per week)
+            finalUnitPrice = Number((freqAmountNum / freqUnitsNum).toFixed(2));
+            finalQty = Math.round(freqUnitsNum * periodMultiplier);
+            finalUnitDesc = isEn
+              ? `units (≈${formatCurrency(freqAmountNum)}/${periodDesc})`
+              : `unidades (≈${formatCurrency(freqAmountNum)}/${periodDesc})`;
+          } else {
+            // Pure spending budget without physical unit breakdown
+            finalUnitPrice = freqAmountNum;
+            finalQty = periodMultiplier;
+            finalUnitDesc = isEn
+              ? `1/${periodDesc} (${formatCurrency(freqAmountNum)})`
+              : `1/${periodDesc} (${formatCurrency(freqAmountNum)})`;
+          }
         }
       } else {
         finalUnitPrice = parseFloat(unitPrice.replace(',', '.')) || 0;
@@ -404,6 +428,9 @@ export default function MonthlyPlanScreen() {
 
   const resolvePlanUnitLabel = (item: MonthlyPlanItem): string => {
     const desc = (item.unit_desc || '').toLowerCase();
+    if (desc.startsWith('unidades') || desc.startsWith('units') || desc.startsWith('u ') || desc.startsWith('u(')) {
+      return t('plan.unit_units');
+    }
     if (desc.includes('/wk') || desc.includes('/sem') || desc.includes('week') || desc.includes('seman')) {
       return t('plan.unit_weeks');
     }
@@ -647,18 +674,53 @@ export default function MonthlyPlanScreen() {
                     onChangeText={setFreqAmount}
                   />
 
+                  {/* Physical Units in Period (Optional - e.g. 12 or 15 milanesas/week) */}
+                  <Text style={styles.inputLabel}>{t('plan.freq_units_label')}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder={t('plan.freq_units_placeholder')}
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={freqUnits}
+                    onChangeText={setFreqUnits}
+                  />
+
+                  {/* Preset chips for physical units */}
+                  <View style={styles.qtyPresetsRow}>
+                    {['4', '6', '10', '12', '15', '20', '24', '30'].map((uVal) => (
+                      <TouchableOpacity
+                        key={uVal}
+                        style={[styles.qtyPresetChip, freqUnits === uVal && styles.qtyPresetChipActive]}
+                        onPress={() => setFreqUnits(uVal)}
+                      >
+                        <Text style={[styles.qtyPresetChipText, freqUnits === uVal && styles.qtyPresetChipTextActive]}>
+                          {uVal} u
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Live Calculation Hint when Units are entered */}
                   {(() => {
-                    const matchedProduct = products.find((p) => p.name.toLowerCase().trim() === name.toLowerCase().trim());
-                    if (matchedProduct && matchedProduct.latest_price && matchedProduct.latest_price > 0 && freqAmountNum > 0) {
-                      const unitsPerWeek = (freqAmountNum / matchedProduct.latest_price).toFixed(1);
-                      const unitsPerMonth = ((freqAmountNum / matchedProduct.latest_price) * (52 / 12)).toFixed(1);
+                    const fUnits = parseFloat(freqUnits.replace(',', '.')) || 0;
+                    if (fUnits > 0 && freqAmountNum > 0) {
+                      const unitEstPrice = freqAmountNum / fUnits;
+                      let periodMult = 4.3333;
+                      if (freqType === 'daily') periodMult = 30.4167;
+                      else if (freqType === 'biweekly') periodMult = 2.17;
+                      else if (freqType === 'monthly') periodMult = 1;
+                      else if (freqType === 'custom') periodMult = 30.4167 / (parseFloat(freqCustomDays) || 1);
+
+                      const mQty = Math.round(fUnits * periodMult);
+                      const mTotal = mQty * unitEstPrice;
                       return (
                         <View style={styles.freqUnitsHintBox}>
                           <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
                           <Text style={styles.freqUnitsHintText}>
-                            {t('plan.weekly_units_hint', {
-                              units: unitsPerWeek,
-                              monthly: unitsPerMonth,
+                            {t('plan.freq_units_calc_hint', {
+                              unitPrice: formatCurrency(unitEstPrice),
+                              monthlyQty: mQty,
+                              monthlyTotal: formatCurrency(mTotal),
                             })}
                           </Text>
                         </View>

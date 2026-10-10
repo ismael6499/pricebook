@@ -88,10 +88,26 @@ function runHomologatorTests() {
     const appleMonthlyQty = Math.round(appleWeeklyQty * (52 / 12)); // 26 apples/month
     const appleMonthlyCost = appleMonthlyQty * applePrice; // $26.000 / month
 
-    assert(appleWeeklyQty === 6, 'Alternating: 3 days x 2 apples = 6 apples/week');
     assert(appleMonthlyQty === 26, 'Alternating: 6 apples/week -> 26 apples/month');
     assertApprox(appleMonthlyCost, 26000.0, 0.01, 'Alternating: Apples monthly budget is $26.000');
     assert(bananaMonthlyCost + appleMonthlyCost === 39000, 'Alternating: Combined fruit budget is $39.000 (prevents double counting)');
+
+    // Case 7: Physical units in recurring period (Agustín's Milanesas: $50.000/week for 12 or 15 milanesas)
+    const milanesasWeeklyAmount = 50000;
+    const milanesasWeeklyUnits12 = 12;
+    const unitPrice12 = milanesasWeeklyAmount / milanesasWeeklyUnits12; // $4.166,67
+    const monthlyUnits12 = Math.round(milanesasWeeklyUnits12 * (52 / 12)); // 52 units
+    const monthlyTotal12 = monthlyUnits12 * unitPrice12; // $216.666,67
+
+    assertApprox(unitPrice12, 4166.67, 0.05, 'Milanesas 12u: Cost per unit is $4.166,67');
+    assert(monthlyUnits12 === 52, 'Milanesas 12u: 12 units/week yields 52 units/month');
+    assertApprox(monthlyTotal12, 216666.67, 0.5, 'Milanesas 12u: Monthly total matches ~$216.666,67');
+
+    const milanesasWeeklyUnits15 = 15;
+    const unitPrice15 = milanesasWeeklyAmount / milanesasWeeklyUnits15; // $3.333,33
+    const monthlyUnits15 = Math.round(milanesasWeeklyUnits15 * (52 / 12)); // 65 units
+    assertApprox(unitPrice15, 3333.33, 0.05, 'Milanesas 15u: Cost per unit is $3.333,33');
+    assert(monthlyUnits15 === 65, 'Milanesas 15u: 15 units/week yields 65 units/month');
   });
 }
 

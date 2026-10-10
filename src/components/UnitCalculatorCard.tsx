@@ -25,8 +25,11 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
   const [customDays, setCustomDays] = useState('3');
 
   // Weight / Units state
-  const [packageGrams, setPackageGrams] = useState('500');
-  const [packageUnits, setPackageUnits] = useState('20');
+  const [packageGrams, setPackageGrams] = useState('');
+  const [packageUnits, setPackageUnits] = useState('12');
+
+  // Physical units in frequency period (e.g. 12 or 15 milanesas/week)
+  const [freqUnits, setFreqUnits] = useState('');
 
   // Volume state (liquids / beverages / oils)
   const [packageVolumeMl, setPackageVolumeMl] = useState('900');
@@ -76,6 +79,19 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
       costPerMonthAvg = (parsedAmount / days) * 30.4167;
     }
   }
+
+  // Physical units in frequency calculations
+  let periodDays = 7;
+  if (basis === 'week') periodDays = 7;
+  else if (basis === 'day') periodDays = 1;
+  else if (basis === 'biweekly') periodDays = 15;
+  else if (basis === 'month') periodDays = 30.4167;
+  else if (basis === 'custom') periodDays = parseFloat(customDays) || 1;
+
+  const freqUnitsNum = parseFloat(freqUnits.replace(',', '.')) || 0;
+  const costPerUnitInPeriod = freqUnitsNum > 0 && parsedAmount > 0 ? parsedAmount / freqUnitsNum : 0;
+  const unitsPerDay = freqUnitsNum > 0 ? freqUnitsNum / periodDays : 0;
+  const unitsPerMonth = freqUnitsNum > 0 ? freqUnitsNum * (30.4167 / periodDays) : 0;
 
   // --- Calculations for Weight & Unit Mode ---
   const gramsNum = parseFloat(packageGrams) || 0;
@@ -214,6 +230,61 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
             </View>
           )}
 
+          {/* Units / Portions in Period (e.g. 12 or 15 milanesas/week) */}
+          <View style={styles.freqUnitsBlock}>
+            <Text style={styles.inputLabel}>{t('unit_calculator.units_per_period')}</Text>
+            <View style={styles.freqUnitsInputRow}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                keyboardType="numeric"
+                value={freqUnits}
+                onChangeText={setFreqUnits}
+                placeholder={t('unit_calculator.units_per_period_placeholder')}
+                placeholderTextColor={colors.textMuted}
+              />
+              {freqUnits.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearUnitsBtn}
+                  onPress={() => setFreqUnits('')}
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Quick Presets for Units */}
+            <View style={styles.unitPresetsRow}>
+              {['6', '10', '12', '15', '20', '30'].map((uVal) => (
+                <TouchableOpacity
+                  key={uVal}
+                  style={[styles.unitPresetChip, freqUnits === uVal && styles.unitPresetChipActive]}
+                  onPress={() => setFreqUnits(uVal)}
+                >
+                  <Text style={[styles.unitPresetChipText, freqUnits === uVal && styles.unitPresetChipTextActive]}>
+                    {uVal} u
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Unit Cost Hero Highlight when units are specified */}
+          {freqUnitsNum > 0 && costPerUnitInPeriod > 0 && (
+            <View style={styles.unitCostHighlightCard}>
+              <View style={styles.unitCostHeader}>
+                <Ionicons name="pricetag" size={16} color={colors.primary} />
+                <Text style={styles.unitCostTitle}>{t('unit_calculator.cost_per_item')}</Text>
+              </View>
+              <Text style={styles.unitCostBigValue}>{formatCurrency(costPerUnitInPeriod)}</Text>
+              <Text style={styles.unitCostSubtext}>
+                {t('unit_calculator.unit_breakdown_subtext', {
+                  perDay: unitsPerDay.toFixed(1),
+                  perMonth: Math.round(unitsPerMonth),
+                })}
+              </Text>
+            </View>
+          )}
+
           {/* Daily & Weekly Homologation Grid */}
           <View style={styles.metricsGrid}>
             <View style={styles.metricBox}>
@@ -286,12 +357,14 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
             </View>
           </View>
 
-          {/* Quick Unit Presets for Eggs & Packs */}
+          {/* Quick Unit Presets for Eggs, Milanesas & Packs */}
           <View style={styles.unitPresetsRow}>
             {[
               { label: t('unit_calculator.unit_preset_single'), val: '1' },
               { label: t('unit_calculator.unit_preset_half_dozen'), val: '6' },
+              { label: '10 u', val: '10' },
               { label: t('unit_calculator.unit_preset_dozen'), val: '12' },
+              { label: '15 u', val: '15' },
               { label: t('unit_calculator.unit_preset_tray_20'), val: '20' },
               { label: t('unit_calculator.unit_preset_tray'), val: '30' },
             ].map((p) => (
@@ -311,18 +384,22 @@ export default function UnitCalculatorCard({ unitPrice }: UnitCalculatorCardProp
           <View style={styles.metricsGrid}>
             <View style={styles.metricBox}>
               <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_100g')}</Text>
-              <Text style={styles.metricValue}>{formatCurrency(costPer100g)}</Text>
+              <Text style={styles.metricValue}>
+                {costPer100g > 0 ? formatCurrency(costPer100g) : '--'}
+              </Text>
             </View>
 
             <View style={styles.metricBox}>
               <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_kg')}</Text>
-              <Text style={styles.metricValue}>{formatCurrency(costPerKg)}</Text>
+              <Text style={styles.metricValue}>
+                {costPerKg > 0 ? formatCurrency(costPerKg) : '--'}
+              </Text>
             </View>
 
             <View style={styles.metricBox}>
               <Text style={styles.metricLabel}>{t('unit_calculator.cost_per_unit')}</Text>
               <Text style={[styles.metricValue, { color: colors.primary }]}>
-                {formatCurrency(costPerSingleUnit)}
+                {costPerSingleUnit > 0 ? formatCurrency(costPerSingleUnit) : '--'}
               </Text>
             </View>
           </View>
@@ -647,5 +724,49 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 10,
     fontStyle: 'italic',
+  },
+  freqUnitsBlock: {
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  freqUnitsInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearUnitsBtn: {
+    padding: 6,
+  },
+  unitCostHighlightCard: {
+    backgroundColor: `${colors.primary}18`,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: `${colors.primary}40`,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  unitCostHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  unitCostTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: 'uppercase',
+  },
+  unitCostBigValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.primary,
+    marginVertical: 2,
+  },
+  unitCostSubtext: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
 });
